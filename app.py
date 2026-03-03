@@ -18,7 +18,7 @@ app.secret_key = secrets.token_hex(32)
 
 # ========== 持久化配置 ==========
 
-CONFIG_DIR = "/opt/yeluji"
+CONFIG_DIR = "/opt/yolushiki"
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 DEFAULT_CONFIG = {
@@ -575,11 +575,11 @@ def do_install():
 
         # 将夜鹭机管理面板自身注册为 PM2 常驻服务
         log("注册夜鹭机管理面板为常驻服务...")
-        run_command("pm2 delete yeluji 2>/dev/null || true", quiet=True)
-        yeluji_app = os.path.join(CONFIG_DIR, "app.py")
-        if os.path.exists(yeluji_app):
+        run_command("pm2 delete yolushiki 2>/dev/null || true", quiet=True)
+        yolushiki_app = os.path.join(CONFIG_DIR, "app.py")
+        if os.path.exists(yolushiki_app):
             run_command(
-                f'pm2 start {yeluji_app} --name "yeluji" --interpreter python3 -- --port 9999 --host 0.0.0.0',
+                f'pm2 start {yolushiki_app} --name "yolushiki" --interpreter python3 -- --port 9999 --host 0.0.0.0',
                 quiet=True
             )
             run_command("pm2 save", quiet=True)

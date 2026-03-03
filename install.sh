@@ -4,7 +4,7 @@
 # 
 # 使用方法：
 # 1. 在1Panel文件管理器中，把这个文件拖到 /opt 目录
-# 2. 打开1Panel终端，输入: bash /opt/yeluji/install.sh
+# 2. 打开1Panel终端，输入: bash /opt/yolushiki/install.sh
 # 3. 按照浏览器提示操作即可
 # ============================================================
 
@@ -20,7 +20,7 @@ NC='\033[0m'
 
 # 配置
 INSTALLER_PORT=9999
-LOG_FILE="/tmp/yeluji_install.log"
+LOG_FILE="/tmp/yolushiki_install.log"
 
 # 初始化日志文件
 echo "======== 夜鹭机安装日志 ========" > "$LOG_FILE"
@@ -48,9 +48,9 @@ run_with_spinner() {
     "$@" > /dev/null 2>&1 &
     spin $! "$msg"
 }
-INSTALLER_DIR="/tmp/yeluji_installer"
+INSTALLER_DIR="/tmp/yolushiki_installer"
 # TODO: 替换为实际的下载地址
-DOWNLOAD_BASE="https://raw.githubusercontent.com/Luna-channel/yeluji/main/installer"
+DOWNLOAD_BASE="https://raw.githubusercontent.com/Luna-channel/yolushiki/main/installer"
 
 clear
 echo -e "${CYAN}"
@@ -187,36 +187,36 @@ echo -e "      ${CYAN}💡${NC}  马上就好，正在生成配置界面..."
 echo ""
 
 # 创建安装器目录
-YELUJI_DIR="/opt/yeluji"
-mkdir -p "$YELUJI_DIR/templates"
+YOLUSHIKI_DIR="/opt/yolushiki"
+mkdir -p "$YOLUSHIKI_DIR/templates"
 
 # 获取脚本所在目录（安装包目录）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo -e "      ${CYAN}💡${NC}  复制管理面板文件..."
 
-mkdir -p "$YELUJI_DIR/static"
-mkdir -p "$YELUJI_DIR/templates"
+mkdir -p "$YOLUSHIKI_DIR/static"
+mkdir -p "$YOLUSHIKI_DIR/templates"
 
 # 从安装包目录复制文件到目标目录
 COPY_OK=1
 
 if [ -f "$SCRIPT_DIR/app.py" ]; then
-    cp "$SCRIPT_DIR/app.py" "$YELUJI_DIR/app.py" || COPY_OK=0
+    cp "$SCRIPT_DIR/app.py" "$YOLUSHIKI_DIR/app.py" || COPY_OK=0
 else
     echo -e "      ${RED}✗${NC}  找不到 app.py"
     COPY_OK=0
 fi
 
 if [ -f "$SCRIPT_DIR/static/logo.png" ]; then
-    cp "$SCRIPT_DIR/static/logo.png" "$YELUJI_DIR/static/logo.png" || COPY_OK=0
+    cp "$SCRIPT_DIR/static/logo.png" "$YOLUSHIKI_DIR/static/logo.png" || COPY_OK=0
 else
     echo -e "      ${YELLOW}⚠${NC}  找不到 logo.png（非必须）"
 fi
 
 for tpl in login.html index.html tutorial_napcat.html tutorial_astrbot.html tutorial_tavern.html; do
     if [ -f "$SCRIPT_DIR/templates/$tpl" ]; then
-        cp "$SCRIPT_DIR/templates/$tpl" "$YELUJI_DIR/templates/$tpl" || COPY_OK=0
+        cp "$SCRIPT_DIR/templates/$tpl" "$YOLUSHIKI_DIR/templates/$tpl" || COPY_OK=0
     else
         echo -e "      ${RED}✗${NC}  找不到 templates/$tpl"
         COPY_OK=0
@@ -227,7 +227,7 @@ if [ "$COPY_OK" -eq 0 ]; then
     echo -e "      ${RED}✗${NC}  部分文件复制失败"
     echo -e "      ${YELLOW}⚠${NC}  请确保安装包完整（app.py, static/, templates/ 都在同一目录）"
     # 如果下载失败，使用内嵌的精简版（仅包含安装器核心功能）
-    cat > "$YELUJI_DIR/app.py" << 'PYTHON_EOF'
+    cat > "$YOLUSHIKI_DIR/app.py" << 'PYTHON_EOF'
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """夜鹭机 一键部署 WebUI"""
@@ -618,7 +618,7 @@ if __name__ == "__main__":
 PYTHON_EOF
 
     # 内嵌基础 index.html 模板
-    cat > "$YELUJI_DIR/templates/index.html" << 'HTML_EOF'
+    cat > "$YOLUSHIKI_DIR/templates/index.html" << 'HTML_EOF'
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -766,8 +766,8 @@ echo -e "   ${YELLOW}⚠ 如果打不开，请检查：${NC}"
 echo -e "      1. 云服务商控制台是否放行了 ${INSTALLER_PORT} 端口"
 echo -e "      2. 防火墙是否允许访问"
 echo ""
-echo -e "   ${CYAN}Token 存储位置: /opt/yeluji/config.json${NC}"
-echo -e "   ${CYAN}忘记 Token 请运行: cat /opt/yeluji/config.json${NC}"
+echo -e "   ${CYAN}Token 存储位置: /opt/yolushiki/config.json${NC}"
+echo -e "   ${CYAN}忘记 Token 请运行: cat /opt/yolushiki/config.json${NC}"
 echo ""
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
@@ -778,7 +778,7 @@ echo -e "${YELLOW}首次启动中... 完成 Token 设置和安装后，按 Ctrl+
 echo -e "${YELLOW}之后管理面板将由 PM2 自动保持运行${NC}"
 echo ""
 
-cd "$YELUJI_DIR"
+cd "$YOLUSHIKI_DIR"
 python3 app.py --port $INSTALLER_PORT --host 0.0.0.0
 
 # 用户 Ctrl+C 退出后，用 PM2 注册为常驻服务（如果 PM2 已安装）
@@ -786,17 +786,17 @@ echo ""
 echo -e "${BLUE}正在将夜鹭机注册为常驻服务...${NC}"
 
 if command -v pm2 &> /dev/null; then
-    pm2 delete yeluji 2>/dev/null || true
-    pm2 start "$YELUJI_DIR/app.py" --name "yeluji" --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0
+    pm2 delete yolushiki 2>/dev/null || true
+    pm2 start "$YOLUSHIKI_DIR/app.py" --name "yolushiki" --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0
     pm2 save
     pm2 startup 2>/dev/null || true
     echo -e "${GREEN}✓${NC} 夜鹭机管理面板已注册为 PM2 常驻服务"
     echo -e "   访问地址: ${WEBUI_URL}"
-    echo -e "   管理命令: pm2 status / pm2 logs yeluji / pm2 restart yeluji"
+    echo -e "   管理命令: pm2 status / pm2 logs yolushiki / pm2 restart yolushiki"
 else
     echo -e "${YELLOW}⚠${NC} PM2 尚未安装（安装服务后将自动配置）"
     echo -e "   请完成安装后手动运行以下命令注册常驻服务："
-    echo -e "   ${CYAN}pm2 start $YELUJI_DIR/app.py --name yeluji --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0${NC}"
+    echo -e "   ${CYAN}pm2 start $YOLUSHIKI_DIR/app.py --name yolushiki --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0${NC}"
     echo -e "   ${CYAN}pm2 save && pm2 startup${NC}"
 fi
 
