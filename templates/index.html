@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夜鹭机 - 管理面板</title>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a1628;
+            --bg-secondary: #111d32;
+            --bg-card: rgba(20,40,80,0.5);
+            --accent-blue: #2d5a8e;
+            --accent-blue-light: #4a8ecf;
+            --accent-red: #c0392b;
+            --accent-yellow: #d4a017;
+            --accent-green: #27ae60;
+            --text-primary: #e0e6f0;
+            --text-secondary: #7a8ba5;
+            --border: rgba(45,90,142,0.3);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, #0d2137 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+
+        /* ===== 顶部导航 ===== */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: rgba(10,22,40,0.8);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .topbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #fff;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        .topbar-brand i { color: var(--accent-blue-light); }
+        .topbar-actions { display: flex; gap: 8px; }
+        .topbar-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .topbar-btn:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+        .topbar-btn i { width: 16px; height: 16px; }
+
+        /* ===== 容器 ===== */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        /* ===== 卡片 ===== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .card h2 {
+            color: #fff;
+            margin-bottom: 20px;
+            font-size: 1.15rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card h2 i { color: var(--accent-blue-light); width: 20px; height: 20px; }
+
+        /* ===== 服务卡片网格 ===== */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 700px) {
+            .services-grid { grid-template-columns: 1fr; }
+        }
+        .svc-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .svc-card:hover { border-color: var(--accent-blue-light); }
+        .svc-icon {
+            width: 48px; height: 48px;
+            margin: 0 auto 12px;
+            color: var(--accent-blue-light);
+        }
+        .svc-name {
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+        .svc-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
+        .svc-status .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .svc-status.online { background: rgba(39,174,96,0.15); color: var(--accent-green); }
+        .svc-status.online .dot { background: var(--accent-green); }
+        .svc-status.stopped { background: rgba(192,57,43,0.15); color: var(--accent-red); }
+        .svc-status.stopped .dot { background: var(--accent-red); }
+        .svc-status.loading { background: rgba(212,160,23,0.15); color: var(--accent-yellow); }
+        .svc-status.loading .dot { background: var(--accent-yellow); }
+        .svc-resource {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+        .svc-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .svc-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .svc-btn:hover { background: var(--bg-card); color: #fff; }
+        .svc-btn i { width: 14px; height: 14px; }
+        .svc-btn.open-btn { border-color: var(--accent-blue); color: var(--accent-blue-light); }
+        .svc-btn.open-btn:hover { background: rgba(45,90,142,0.2); }
+        .svc-btn.restart-btn { border-color: var(--accent-yellow); color: var(--accent-yellow); }
+        .svc-btn.restart-btn:hover { background: rgba(212,160,23,0.15); }
+
+        /* ===== 快捷操作 ===== */
+        .quick-links { display: grid; gap: 10px; }
+        .quick-link {
+            display: flex;
+            align-items: center;
+            padding: 14px 18px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 10px;
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            width: 100%;
+            font-size: 0.95rem;
+        }
+        .quick-link:hover { background: rgba(45,90,142,0.15); transform: translateX(4px); }
+        .quick-link i { width: 20px; height: 20px; margin-right: 12px; color: var(--accent-blue-light); }
+        .quick-link .ql-text { flex: 1; color: var(--text-primary); text-align: left; }
+        .quick-link .ql-arrow { color: var(--text-secondary); }
+        .quick-link .ql-arrow i { width: 16px; height: 16px; margin-right: 0; }
+
+        /* ===== 系统信息 ===== */
+        .sys-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+        @media (max-width: 500px) { .sys-grid { grid-template-columns: 1fr; } }
+        .sys-item {
+            background: rgba(0,0,0,0.15);
+            padding: 14px;
+            border-radius: 10px;
+        }
+        .sys-item .sys-label {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sys-item .sys-label i { width: 14px; height: 14px; }
+        .sys-item .sys-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        /* ===== 安装向导样式 ===== */
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .form-group input[type="number"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1rem;
+        }
+        .form-group input:focus { outline: none; border-color: var(--accent-blue-light); }
+        .form-group .hint { font-size: 0.82rem; color: var(--text-secondary); margin-top: 5px; }
+        .port-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        @media (max-width: 500px) { .port-row { grid-template-columns: 1fr; } }
+        .port-item {
+            background: rgba(0,0,0,0.2);
+            padding: 14px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .port-item .label { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; }
+        .port-item .value { font-size: 1.1rem; color: var(--accent-blue-light); font-weight: bold; }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent-blue-light); }
+        .plugin-list { display: grid; gap: 10px; }
+        .plugin-item {
+            display: flex;
+            align-items: center;
+            padding: 14px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .plugin-item:hover { background: rgba(45,90,142,0.1); }
+        .plugin-item input[type="checkbox"] { width: 18px; height: 18px; margin-right: 14px; accent-color: var(--accent-blue-light); }
+        .plugin-item .info { flex: 1; }
+        .plugin-item .name { font-weight: 500; color: #fff; margin-bottom: 2px; }
+        .plugin-item .desc { font-size: 0.82rem; color: var(--text-secondary); }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 32px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-light) 100%);
+            color: #fff;
+            width: 100%;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(45,90,142,0.4);
+        }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* 进度条 */
+        .progress-bar-container {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            height: 18px;
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-green) 100%);
+            width: 0%;
+            transition: width 0.5s ease;
+            border-radius: 10px;
+        }
+        .progress-text {
+            text-align: center;
+            font-size: 1rem;
+            color: #fff;
+            margin-bottom: 16px;
+        }
+        .log-box {
+            background: #060d18;
+            border-radius: 8px;
+            padding: 14px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: var(--accent-green);
+        }
+        .log-box .log-line { margin-bottom: 4px; }
+
+        /* 隐藏区 */
+        .section { display: none; }
+        .section.active { display: block; }
+
+        /* ===== 弹窗 ===== */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 480px;
+            width: 100%;
+        }
+        .modal h2 {
+            color: #fff;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.15rem;
+        }
+        .modal h2 i { color: var(--accent-yellow); }
+        .modal .input-group { margin-bottom: 16px; }
+        .modal .input-group label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        .modal .input-group label i { width: 14px; height: 14px; }
+        .modal .input-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 0.95rem;
+        }
+        .modal .input-group input:focus { outline: none; border-color: var(--accent-blue-light); }
+        .modal .modal-error {
+            background: rgba(192,57,43,0.15);
+            border: 1px solid rgba(192,57,43,0.3);
+            color: var(--accent-red);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            margin-bottom: 12px;
+            display: none;
+        }
+        .modal .modal-error.show { display: block; }
+        .modal .modal-success {
+            background: rgba(39,174,96,0.15);
+            border: 1px solid rgba(39,174,96,0.3);
+            color: var(--accent-green);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            margin-bottom: 12px;
+            display: none;
+        }
+        .modal .modal-success.show { display: block; }
+        .modal-btns { display: flex; gap: 10px; }
+        .modal-btns .btn { flex: 1; padding: 10px; font-size: 0.9rem; }
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .btn-secondary:hover { background: var(--bg-card); color: var(--text-primary); }
+
+        /* 日志弹窗 */
+        .logs-content {
+            background: #060d18;
+            border-radius: 8px;
+            padding: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 0.78rem;
+            color: var(--accent-green);
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <div class="topbar">
+        <div class="topbar-brand">
+            <img src="/static/logo.png" alt="夜鹭机" style="width:28px;height:28px;border-radius:4px;">
+            <span>夜鹭机</span>
+        </div>
+        <div class="topbar-actions">
+            <button class="topbar-btn" onclick="doLogout()">
+                <i data-lucide="log-out"></i> 退出
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- ========== 安装向导 ========== -->
+        <div id="setup-section" class="section">
+            <div style="text-align:center; margin-bottom:30px;">
+                <img src="/static/logo.png" alt="夜鹭机" style="width:72px;height:72px;border-radius:12px;margin-bottom:12px;">
+                <h1 style="color:#fff;font-size:2rem;margin-bottom:8px;">夜鹭机</h1>
+                <p style="color:var(--text-secondary);">一键部署 AstrBot + SillyTavern</p>
+            </div>
+
+            <div class="card">
+                <h2><i data-lucide="radio-tower"></i> 端口配置</h2>
+                <div class="port-row" style="margin-bottom:18px;">
+                    <div class="port-item">
+                        <div class="label">AstrBot</div>
+                        <div class="value">6185</div>
+                    </div>
+                    <div class="port-item">
+                        <div class="label">NapCat</div>
+                        <div class="value">6099</div>
+                    </div>
+                    <div class="port-item">
+                        <div class="label">默认端口</div>
+                        <div class="value" style="color:var(--text-secondary);">固定</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="tavern-port">SillyTavern 端口 <span style="color:var(--accent-red);">*必须自定义</span></label>
+                    <input type="number" id="tavern-port" value="18888" min="1024" max="65535">
+                    <div class="hint">建议使用 10000-65535 之间的端口，避免被扫描</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i data-lucide="settings"></i> 安装选项</h2>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enable-multiuser" checked>
+                    <label for="enable-multiuser">启用 SillyTavern 多用户模式（推荐）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="install-plugins" checked>
+                    <label for="install-plugins">安装夜鹭一键包（预装AstrBot插件）</label>
+                </div>
+            </div>
+
+            <div class="card" id="plugins-card">
+                <h2><i data-lucide="plug"></i> 插件选择</h2>
+                <div class="plugin-list">
+                    {% for plugin in plugins %}
+                    <label class="plugin-item">
+                        <input type="checkbox" name="plugin" value="{{ loop.index0 }}" {% if plugin.selected %}checked{% endif %}>
+                        <div class="info">
+                            <div class="name">{{ plugin.name }}</div>
+                            <div class="desc">{{ plugin.description }}</div>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card">
+                <button class="btn btn-primary" id="install-btn" onclick="startInstall()">
+                    <i data-lucide="rocket"></i> 开始安装
+                </button>
+            </div>
+        </div>
+
+        <!-- ========== 安装进度 ========== -->
+        <div id="progress-section" class="section">
+            <div class="card">
+                <h2><i data-lucide="package"></i> 正在安装（请耐心等待）</h2>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div class="progress-text" id="progress-text">准备中...</div>
+                <div class="log-box" id="log-box"></div>
+            </div>
+        </div>
+
+        <!-- ========== 仪表盘 ========== -->
+        <div id="dashboard-section" class="section">
+            <!-- 服务卡片 -->
+            <div class="services-grid">
+                <!-- NapCat -->
+                <div class="svc-card" id="svc-napcat">
+                    <i data-lucide="cat" class="svc-icon"></i>
+                    <div class="svc-name">NapCat</div>
+                    <div class="svc-status loading" id="status-napcat">
+                        <span class="dot"></span> 检测中...
+                    </div>
+                    <div class="svc-resource" id="res-napcat">--</div>
+                    <div class="svc-actions">
+                        <button class="svc-btn open-btn" onclick="openNapCat()">
+                            <i data-lucide="external-link"></i> 打开
+                        </button>
+                        <button class="svc-btn restart-btn" onclick="restartService('napcat')">
+                            <i data-lucide="refresh-cw"></i> 重启
+                        </button>
+                    </div>
+                </div>
+                <!-- AstrBot -->
+                <div class="svc-card" id="svc-astrbot">
+                    <i data-lucide="bot" class="svc-icon"></i>
+                    <div class="svc-name">AstrBot</div>
+                    <div class="svc-status loading" id="status-astrbot">
+                        <span class="dot"></span> 检测中...
+                    </div>
+                    <div class="svc-resource" id="res-astrbot">--</div>
+                    <div class="svc-actions">
+                        <button class="svc-btn open-btn" onclick="openService('astrbot')">
+                            <i data-lucide="external-link"></i> 打开
+                        </button>
+                        <button class="svc-btn restart-btn" onclick="restartService('astrbot')">
+                            <i data-lucide="refresh-cw"></i> 重启
+                        </button>
+                    </div>
+                </div>
+                <!-- SillyTavern -->
+                <div class="svc-card" id="svc-sillytavern">
+                    <i data-lucide="warehouse" class="svc-icon"></i>
+                    <div class="svc-name">云酒馆</div>
+                    <div class="svc-status loading" id="status-sillytavern">
+                        <span class="dot"></span> 检测中...
+                    </div>
+                    <div class="svc-resource" id="res-sillytavern">--</div>
+                    <div class="svc-actions">
+                        <button class="svc-btn open-btn" onclick="openService('sillytavern')">
+                            <i data-lucide="external-link"></i> 打开
+                        </button>
+                        <button class="svc-btn restart-btn" onclick="restartService('sillytavern')">
+                            <i data-lucide="refresh-cw"></i> 重启
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NapCat Token 信息 -->
+            <div class="card" id="napcat-token-card" style="display:none;">
+                <h2><i data-lucide="key"></i> NapCat 登录信息</h2>
+                <div style="background:rgba(0,0,0,0.2);padding:14px;border-radius:10px;margin-bottom:10px;">
+                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">WebUI Token（点击打开按钮可自动登录）</div>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <code id="napcat-token-value" style="flex:1;background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;word-break:break-all;">加载中...</code>
+                        <button class="svc-btn" onclick="copyNapCatToken()" style="white-space:nowrap;">
+                            <i data-lucide="copy"></i> 复制
+                        </button>
+                    </div>
+                </div>
+                <div style="font-size:0.75rem;color:var(--text-secondary);">
+                    Token 来源: <code style="background:#060d18;padding:1px 6px;border-radius:3px;color:var(--accent-green);font-size:0.72rem;">/opt/astrbot/napcat/config/webui.json</code>
+                </div>
+            </div>
+
+            <!-- 快捷操作 -->
+            <div class="card">
+                <h2><i data-lucide="zap"></i> 快捷操作</h2>
+                <div class="quick-links">
+                    <a class="quick-link" href="/tutorial/napcat">
+                        <i data-lucide="book-open"></i>
+                        <span class="ql-text">NapCat 扫码登录教程</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </a>
+                    <a class="quick-link" href="/tutorial/astrbot">
+                        <i data-lucide="book-open"></i>
+                        <span class="ql-text">AstrBot 配置教程</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </a>
+                    <a class="quick-link" href="/tutorial/tavern">
+                        <i data-lucide="book-open"></i>
+                        <span class="ql-text">SillyTavern 使用指南</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </a>
+                    <div class="quick-link" onclick="showChangeToken()">
+                        <i data-lucide="key"></i>
+                        <span class="ql-text">修改访问令牌 (Token)</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统信息 -->
+            <div class="card">
+                <h2><i data-lucide="server"></i> 系统信息</h2>
+                <div class="sys-grid">
+                    <div class="sys-item">
+                        <div class="sys-label"><i data-lucide="globe"></i> 服务器 IP</div>
+                        <div class="sys-value" id="sys-ip">--</div>
+                    </div>
+                    <div class="sys-item">
+                        <div class="sys-label"><i data-lucide="clock"></i> 运行时间</div>
+                        <div class="sys-value" id="sys-uptime">--</div>
+                    </div>
+                    <div class="sys-item">
+                        <div class="sys-label"><i data-lucide="cpu"></i> 内存使用</div>
+                        <div class="sys-value" id="sys-mem">--</div>
+                    </div>
+                    <div class="sys-item">
+                        <div class="sys-label"><i data-lucide="hard-drive"></i> 磁盘使用</div>
+                        <div class="sys-value" id="sys-disk">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 修改 Token 弹窗 ===== -->
+    <div class="modal-overlay hidden" id="token-modal">
+        <div class="modal">
+            <h2><i data-lucide="key"></i> 修改访问令牌</h2>
+            <div class="modal-error" id="token-error"></div>
+            <div class="modal-success" id="token-success"></div>
+            <div class="input-group">
+                <label><i data-lucide="lock"></i> 旧 Token</label>
+                <input type="password" id="old-token" placeholder="输入当前 Token">
+            </div>
+            <div class="input-group">
+                <label><i data-lucide="key"></i> 新 Token</label>
+                <input type="password" id="new-token" placeholder="输入新 Token">
+            </div>
+            <div class="input-group">
+                <label><i data-lucide="check-circle"></i> 确认新 Token</label>
+                <input type="password" id="new-token-confirm" placeholder="再次输入新 Token">
+            </div>
+            <div class="modal-btns">
+                <button class="btn btn-secondary" onclick="hideChangeToken()">取消</button>
+                <button class="btn btn-primary" onclick="changeToken()">确认修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 日志弹窗 ===== -->
+    <div class="modal-overlay hidden" id="logs-modal">
+        <div class="modal" style="max-width:600px;">
+            <h2><i data-lucide="terminal"></i> 服务日志 <span id="logs-svc-name"></span></h2>
+            <div class="logs-content" id="logs-content">加载中...</div>
+            <div class="modal-btns">
+                <button class="btn btn-secondary" onclick="hideLogsModal()" style="flex:none;padding:10px 24px;">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== 全局变量 =====
+        const CONFIG = {{ config | tojson }};
+        let statusInterval = null;
+        let installInterval = null;
+
+        // ===== 初始化 =====
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            try {
+                const res = await fetch('/api/auth/check');
+                const data = await res.json();
+                if (data.installed) {
+                    showDashboard();
+                } else {
+                    showSetup();
+                }
+            } catch(e) {
+                showSetup();
+            }
+        });
+
+        // ===== 页面切换 =====
+        function showSection(id) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            const el = document.getElementById(id);
+            if (el) el.classList.add('active');
+        }
+
+        function showSetup() {
+            showSection('setup-section');
+            if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+        }
+
+        function showDashboard() {
+            showSection('dashboard-section');
+            refreshStatus();
+            refreshSystemInfo();
+            fetchNapCatToken();
+            if (statusInterval) clearInterval(statusInterval);
+            statusInterval = setInterval(refreshStatus, 8000);
+        }
+
+        // ===== 安装向导 =====
+        function startInstall() {
+            const tavernPort = parseInt(document.getElementById('tavern-port').value);
+            const installPlugins = document.getElementById('install-plugins').checked;
+            const enableMultiuser = document.getElementById('enable-multiuser').checked;
+            const selectedPlugins = [];
+            document.querySelectorAll('input[name="plugin"]:checked').forEach(cb => {
+                selectedPlugins.push(parseInt(cb.value));
+            });
+            if (tavernPort < 1024 || tavernPort > 65535) {
+                alert('端口必须在 1024-65535 之间');
+                return;
+            }
+            showSection('progress-section');
+            fetch('/api/install', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tavern_port: tavernPort,
+                    install_plugins: installPlugins,
+                    enable_multi_user: enableMultiuser,
+                    selected_plugins: selectedPlugins
+                })
+            });
+            installInterval = setInterval(checkInstallStatus, 1000);
+        }
+
+        function checkInstallStatus() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('progress-bar').style.width = data.progress + '%';
+                    document.getElementById('progress-text').textContent = data.message + ' (' + data.progress + '%)';
+                    const logBox = document.getElementById('log-box');
+                    logBox.innerHTML = data.logs.map(l => '<div class="log-line">' + l + '</div>').join('');
+                    logBox.scrollTop = logBox.scrollHeight;
+                    if (data.stage === 'completed') {
+                        clearInterval(installInterval);
+                        setTimeout(() => showDashboard(), 1500);
+                    } else if (data.stage === 'error') {
+                        clearInterval(installInterval);
+                        alert('安装失败: ' + data.message);
+                    }
+                });
+        }
+
+        // 插件区域显示/隐藏
+        document.getElementById('install-plugins')?.addEventListener('change', function() {
+            document.getElementById('plugins-card').style.display = this.checked ? 'block' : 'none';
+        });
+
+        // ===== 仪表盘：服务状态 =====
+        async function refreshStatus() {
+            try {
+                const res = await fetch('/api/services/status');
+                if (res.status === 401) { window.location.href = '/login'; return; }
+                const data = await res.json();
+                for (const [name, info] of Object.entries(data)) {
+                    updateServiceCard(name, info);
+                }
+                lucide.createIcons();
+            } catch(e) { console.error('刷新状态失败', e); }
+        }
+
+        function updateServiceCard(name, info) {
+            const statusEl = document.getElementById('status-' + name);
+            const resEl = document.getElementById('res-' + name);
+            if (!statusEl) return;
+
+            const isOnline = info.status === 'online' || info.status === 'running';
+            const statusClass = isOnline ? 'online' : 'stopped';
+            const statusText = isOnline ? '运行中' : '已停止';
+
+            statusEl.className = 'svc-status ' + statusClass;
+            statusEl.innerHTML = '<span class="dot"></span> ' + statusText;
+
+            // 资源占用
+            if (info.memory > 0) {
+                const memMB = (info.memory / 1024 / 1024).toFixed(1);
+                resEl.textContent = memMB + ' MB';
+                if (info.cpu > 0) resEl.textContent += ' | CPU ' + info.cpu.toFixed(1) + '%';
+            } else {
+                resEl.textContent = isOnline ? '资源采集中...' : '--';
+            }
+        }
+
+        // ===== 仪表盘：系统信息 =====
+        async function refreshSystemInfo() {
+            try {
+                const res = await fetch('/api/system/info');
+                const data = await res.json();
+                document.getElementById('sys-ip').textContent = data.ip || '--';
+                document.getElementById('sys-uptime').textContent = formatUptime(data.uptime_seconds);
+                document.getElementById('sys-mem').textContent = formatBytes(data.mem_used) + ' / ' + formatBytes(data.mem_total);
+                document.getElementById('sys-disk').textContent = formatBytes(data.disk_used) + ' / ' + formatBytes(data.disk_total);
+            } catch(e) { console.error('获取系统信息失败', e); }
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+        }
+
+        function formatUptime(seconds) {
+            if (!seconds) return '--';
+            const d = Math.floor(seconds / 86400);
+            const h = Math.floor((seconds % 86400) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            if (d > 0) return d + '天 ' + h + '小时';
+            if (h > 0) return h + '小时 ' + m + '分钟';
+            return m + '分钟';
+        }
+
+        // ===== 服务操作 =====
+        let napCatTokenData = null;
+
+        function openService(name) {
+            const ip = document.getElementById('sys-ip')?.textContent || CONFIG.server_ip || window.location.hostname;
+            const portMap = {
+                napcat: CONFIG.napcat_port || 6099,
+                astrbot: CONFIG.astrbot_port || 6185,
+                sillytavern: CONFIG.tavern_port || 18888
+            };
+            window.open('http://' + ip + ':' + portMap[name], '_blank');
+        }
+
+        async function openNapCat() {
+            if (napCatTokenData && napCatTokenData.url) {
+                window.open(napCatTokenData.url, '_blank');
+            } else {
+                openService('napcat');
+            }
+        }
+
+        async function fetchNapCatToken() {
+            try {
+                const res = await fetch('/api/napcat/token');
+                const data = await res.json();
+                napCatTokenData = data;
+                const card = document.getElementById('napcat-token-card');
+                const valueEl = document.getElementById('napcat-token-value');
+                if (data.token) {
+                    card.style.display = 'block';
+                    valueEl.textContent = data.token;
+                } else {
+                    card.style.display = 'block';
+                    valueEl.textContent = '未获取到（容器可能还在初始化）';
+                    valueEl.style.color = 'var(--text-secondary)';
+                }
+            } catch(e) { console.error('获取NapCat Token失败', e); }
+        }
+
+        function copyNapCatToken() {
+            const token = document.getElementById('napcat-token-value')?.textContent;
+            if (token && navigator.clipboard) {
+                navigator.clipboard.writeText(token);
+                const btn = event.target.closest('.svc-btn');
+                if (btn) { const orig = btn.innerHTML; btn.innerHTML = '<i data-lucide="check"></i> 已复制'; lucide.createIcons(); setTimeout(() => { btn.innerHTML = orig; lucide.createIcons(); }, 1500); }
+            }
+        }
+
+        async function restartService(name) {
+            const btn = event.target.closest('.svc-btn');
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+            const statusEl = document.getElementById('status-' + name);
+            if (statusEl) {
+                statusEl.className = 'svc-status loading';
+                statusEl.innerHTML = '<span class="dot"></span> 重启中...';
+            }
+            try {
+                await fetch('/api/services/' + name + '/restart', { method: 'POST' });
+                setTimeout(refreshStatus, 3000);
+            } catch(e) { alert('操作失败'); }
+            setTimeout(() => {
+                if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+            }, 3000);
+        }
+
+        // ===== Token 修改 =====
+        function showChangeToken() {
+            document.getElementById('token-modal').classList.remove('hidden');
+            document.getElementById('old-token').value = '';
+            document.getElementById('new-token').value = '';
+            document.getElementById('new-token-confirm').value = '';
+            document.getElementById('token-error').classList.remove('show');
+            document.getElementById('token-success').classList.remove('show');
+            lucide.createIcons();
+        }
+        function hideChangeToken() {
+            document.getElementById('token-modal').classList.add('hidden');
+        }
+        async function changeToken() {
+            const old_token = document.getElementById('old-token').value.trim();
+            const new_token = document.getElementById('new-token').value.trim();
+            const new_token_confirm = document.getElementById('new-token-confirm').value.trim();
+            const errEl = document.getElementById('token-error');
+            const successEl = document.getElementById('token-success');
+            errEl.classList.remove('show');
+            successEl.classList.remove('show');
+            if (!old_token || !new_token || !new_token_confirm) {
+                errEl.textContent = '所有字段必须填写';
+                errEl.classList.add('show');
+                return;
+            }
+            if (new_token !== new_token_confirm) {
+                errEl.textContent = '两次输入不一致';
+                errEl.classList.add('show');
+                return;
+            }
+            try {
+                const res = await fetch('/api/auth/change-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ old_token, new_token, new_token_confirm })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    successEl.textContent = data.message;
+                    successEl.classList.add('show');
+                    setTimeout(() => { window.location.href = '/login'; }, 1500);
+                } else {
+                    errEl.textContent = data.error || '修改失败';
+                    errEl.classList.add('show');
+                }
+            } catch(e) {
+                errEl.textContent = '网络错误';
+                errEl.classList.add('show');
+            }
+        }
+
+        // ===== 日志弹窗 =====
+        function hideLogsModal() {
+            document.getElementById('logs-modal').classList.add('hidden');
+        }
+
+        // ===== 退出登录 =====
+        async function doLogout() {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

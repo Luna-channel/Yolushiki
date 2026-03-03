@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AstrBot 配置教程 - 夜鹭机</title>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a1628;
+            --bg-secondary: #111d32;
+            --bg-card: rgba(20,40,80,0.5);
+            --accent-blue: #2d5a8e;
+            --accent-blue-light: #4a8ecf;
+            --accent-red: #c0392b;
+            --accent-yellow: #d4a017;
+            --accent-green: #27ae60;
+            --text-primary: #e0e6f0;
+            --text-secondary: #7a8ba5;
+            --border: rgba(45,90,142,0.3);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, #0d2137 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            padding: 30px 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 18px;
+            background: rgba(45,90,142,0.2);
+            color: var(--accent-blue-light);
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .back-btn:hover { background: rgba(45,90,142,0.35); }
+        .back-btn i { width: 16px; height: 16px; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        h1 { color: #fff; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+        h1 i { color: var(--accent-blue-light); width: 28px; height: 28px; }
+        h2 { color: var(--accent-blue-light); margin: 24px 0 16px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        h2 i { width: 18px; height: 18px; }
+        .step {
+            background: rgba(0,0,0,0.2);
+            padding: 18px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+        .step-num {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            background: var(--accent-blue);
+            color: #fff;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            margin-right: 10px;
+            font-size: 0.85rem;
+        }
+        code {
+            background: #060d18;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: var(--accent-green);
+            font-size: 0.9rem;
+        }
+        .warning {
+            background: rgba(212,160,23,0.1);
+            border: 1px solid rgba(212,160,23,0.3);
+            padding: 14px;
+            border-radius: 8px;
+            margin: 16px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .warning i { color: var(--accent-yellow); width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
+        .tip {
+            background: rgba(39,174,96,0.1);
+            border: 1px solid rgba(39,174,96,0.3);
+            padding: 14px;
+            border-radius: 8px;
+            margin: 16px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .tip i { color: var(--accent-green); width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn"><i data-lucide="arrow-left"></i> 返回管理面板</a>
+        
+        <div class="card">
+            <h1><i data-lucide="bot"></i> AstrBot 配置教程</h1>
+            
+            <h2><i data-lucide="link"></i> 一、配置消息平台（连接NapCat）</h2>
+            
+            <div class="step">
+                <span class="step-num">1</span>
+                <strong>打开AstrBot管理面板</strong>
+                <p style="margin-top:10px;">访问 <code>http://你的服务器IP:6185</code></p>
+            </div>
+            
+            <div class="step">
+                <span class="step-num">2</span>
+                <strong>首次登录设置密码</strong>
+                <p style="margin-top:10px;">按照提示设置管理密码</p>
+            </div>
+            
+            <div class="step">
+                <span class="step-num">3</span>
+                <strong>添加消息平台</strong>
+                <p style="margin-top:10px;">
+                    进入「消息平台」→「添加」<br>
+                    选择「NapCat」<br>
+                    连接地址填写：<code>ws://napcat:6199/ws</code>
+                </p>
+            </div>
+            
+            <div class="tip">
+                <i data-lucide="lightbulb"></i>
+                <span><strong>提示：</strong>因为AstrBot和NapCat在同一个Docker网络内，所以使用容器名<code>napcat</code>而不是IP地址。</span>
+            </div>
+            
+            <h2><i data-lucide="cpu"></i> 二、配置AI模型</h2>
+            
+            <div class="step">
+                <span class="step-num">1</span>
+                <strong>进入「大语言模型」配置</strong>
+                <p style="margin-top:10px;">点击左侧菜单「大语言模型」</p>
+            </div>
+            
+            <div class="step">
+                <span class="step-num">2</span>
+                <strong>添加模型提供商</strong>
+                <p style="margin-top:10px;">
+                    推荐使用：<br>
+                    - DeepSeek（便宜实惠）<br>
+                    - OpenAI（GPT-4）<br>
+                    - 通义千问（阿里云）
+                </p>
+            </div>
+            
+            <div class="step">
+                <span class="step-num">3</span>
+                <strong>填写API Key</strong>
+                <p style="margin-top:10px;">从对应平台获取API Key并填入</p>
+            </div>
+            
+            <h2><i data-lucide="user"></i> 三、设置人格</h2>
+            
+            <div class="step">
+                <span class="step-num">1</span>
+                <strong>进入「人格设定」</strong>
+                <p style="margin-top:10px;">点击左侧菜单「人格设定」</p>
+            </div>
+            
+            <div class="step">
+                <span class="step-num">2</span>
+                <strong>编辑系统提示词</strong>
+                <p style="margin-top:10px;">设置机器人的性格、说话风格等</p>
+            </div>
+            
+            <div class="warning">
+                <i data-lucide="alert-triangle"></i>
+                <span><strong>注意：</strong>修改配置后记得点击「保存」按钮！</span>
+            </div>
+        </div>
+    </div>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

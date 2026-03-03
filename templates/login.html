@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夜鹭机 - 登录</title>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a1628;
+            --bg-secondary: #111d32;
+            --bg-card: rgba(20,40,80,0.5);
+            --accent-blue: #2d5a8e;
+            --accent-blue-light: #4a8ecf;
+            --accent-red: #c0392b;
+            --accent-yellow: #d4a017;
+            --accent-green: #27ae60;
+            --text-primary: #e0e6f0;
+            --text-secondary: #7a8ba5;
+            --border: rgba(45,90,142,0.3);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, #0d2137 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+        }
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .login-header .logo-icon {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+        }
+        .login-header h1 {
+            font-size: 2rem;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .login-header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        .login-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            backdrop-filter: blur(10px);
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        .input-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .input-group label i { width: 16px; height: 16px; }
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent-blue-light);
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-light) 100%);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(45,90,142,0.4);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .error-msg {
+            background: rgba(192,57,43,0.15);
+            border: 1px solid rgba(192,57,43,0.3);
+            color: var(--accent-red);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .error-msg.show { display: block; }
+        .hint {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .hint code {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.78rem;
+            color: var(--accent-yellow);
+        }
+
+        /* Token 首次设置弹窗 */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 420px;
+            width: 100%;
+        }
+        .modal h2 {
+            color: #fff;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+        }
+        .modal h2 i { color: var(--accent-yellow); }
+        .modal .desc {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+        .success-msg {
+            background: rgba(39,174,96,0.15);
+            border: 1px solid rgba(39,174,96,0.3);
+            color: var(--accent-green);
+            padding: 12px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+            display: none;
+            line-height: 1.5;
+        }
+        .success-msg.show { display: block; }
+    </style>
+</head>
+<body>
+    <!-- 首次设置 Token 弹窗 -->
+    <div class="modal-overlay hidden" id="setup-modal">
+        <div class="modal">
+            <h2><i data-lucide="shield-check"></i> 设置访问令牌</h2>
+            <p class="desc">
+                首次使用夜鹭机，请设置一个访问令牌 (Token)。<br>
+                此令牌将用于登录管理面板，请牢记。
+            </p>
+            <div class="error-msg" id="setup-error"></div>
+            <div class="success-msg" id="setup-success"></div>
+            <div class="input-group">
+                <label><i data-lucide="key"></i> 设置 Token</label>
+                <input type="password" id="setup-token" placeholder="输入你的访问令牌">
+            </div>
+            <div class="input-group">
+                <label><i data-lucide="check-circle"></i> 确认 Token</label>
+                <input type="password" id="setup-token-confirm" placeholder="再次输入确认">
+            </div>
+            <button class="btn btn-primary" onclick="setupToken()">
+                <i data-lucide="lock"></i> 确认设置
+            </button>
+            <div class="hint" style="margin-top:16px;">
+                Token 将明文保存至 <code>/opt/yeluji/config.json</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录表单 -->
+    <div class="login-container" id="login-section">
+        <div class="login-header">
+            <img src="/static/logo.png" alt="夜鹭机" class="logo-icon">
+            <h1>夜鹭机</h1>
+            <p>AstrBot + SillyTavern 管理面板</p>
+        </div>
+        <div class="login-card">
+            <div class="error-msg" id="login-error"></div>
+            <div class="input-group">
+                <label><i data-lucide="key"></i> 访问令牌</label>
+                <input type="password" id="login-token" placeholder="输入 Token 登录"
+                       onkeydown="if(event.key==='Enter')doLogin()">
+            </div>
+            <button class="btn btn-primary" id="login-btn" onclick="doLogin()">
+                <i data-lucide="log-in"></i> 登 录
+            </button>
+        </div>
+        <div class="hint">
+            忘记 Token？请 SSH 登录服务器查看<br>
+            <code>cat /opt/yeluji/config.json</code>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Lucide 图标
+        lucide.createIcons();
+
+        // 页面加载时检查状态
+        (async function init() {
+            try {
+                const res = await fetch('/api/auth/check');
+                const data = await res.json();
+                if (!data.token_set) {
+                    // 首次使用，弹出设置弹窗
+                    document.getElementById('setup-modal').classList.remove('hidden');
+                    document.getElementById('login-section').style.display = 'none';
+                } else if (data.authenticated) {
+                    // 已登录，跳转主页
+                    window.location.href = '/';
+                }
+            } catch(e) {
+                console.error('检查状态失败', e);
+            }
+        })();
+
+        async function setupToken() {
+            const token = document.getElementById('setup-token').value.trim();
+            const tokenConfirm = document.getElementById('setup-token-confirm').value.trim();
+            const errEl = document.getElementById('setup-error');
+            const successEl = document.getElementById('setup-success');
+
+            errEl.classList.remove('show');
+            successEl.classList.remove('show');
+
+            if (!token) {
+                errEl.textContent = 'Token 不能为空';
+                errEl.classList.add('show');
+                return;
+            }
+            if (token !== tokenConfirm) {
+                errEl.textContent = '两次输入不一致';
+                errEl.classList.add('show');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/auth/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, token_confirm: tokenConfirm })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    successEl.textContent = data.message + '，正在跳转...';
+                    successEl.classList.add('show');
+                    setTimeout(() => { window.location.href = '/'; }, 1500);
+                } else {
+                    errEl.textContent = data.error || '设置失败';
+                    errEl.classList.add('show');
+                }
+            } catch(e) {
+                errEl.textContent = '网络错误';
+                errEl.classList.add('show');
+            }
+        }
+
+        async function doLogin() {
+            const token = document.getElementById('login-token').value.trim();
+            const errEl = document.getElementById('login-error');
+            errEl.classList.remove('show');
+
+            if (!token) {
+                errEl.textContent = '请输入 Token';
+                errEl.classList.add('show');
+                return;
+            }
+
+            const btn = document.getElementById('login-btn');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    errEl.textContent = data.error || '登录失败';
+                    errEl.classList.add('show');
+                    btn.disabled = false;
+                }
+            } catch(e) {
+                errEl.textContent = '网络错误';
+                errEl.classList.add('show');
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
