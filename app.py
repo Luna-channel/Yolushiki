@@ -63,6 +63,7 @@ install_status = {
     "logs": [],
     "results": {}
 }
+install_generation = 0  # 安装代数，重试时递增，旧线程检测到不匹配则退出
 
 # 插件列表
 ASTRBOT_PLUGINS = [
@@ -103,8 +104,10 @@ def login_required(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         if not config.get("token"):
-            # Token未设置，允许访问（首次使用）
-            return f(*args, **kwargs)
+            # Token未设置，跳转到登录页（会显示首次设置弹窗）
+            if request.is_json or request.path.startswith("/api/"):
+                return jsonify({"error": "请先设置Token", "code": 401}), 401
+            return redirect(url_for("login_page"))
         if not session.get("authenticated"):
             if request.is_json or request.path.startswith("/api/"):
                 return jsonify({"error": "未登录", "code": 401}), 401
@@ -142,6 +145,46 @@ def run_command(cmd, cwd=None, quiet=False):
     except Exception as e:
         if not quiet:
             log(f"执行异常: {str(e)}")
+        return False, str(e)
+
+
+def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
+    """执行命令并实时输出日志（用于 Docker pull 等长时间操作）
+    generation: 传入当前安装代数，如果被新安装覆盖则中止
+    """
+    log(f"执行: {cmd}")
+    try:
+        process = subprocess.Popen(
+            cmd, shell=True, cwd=cwd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1
+        )
+        output_lines = []
+        last_log_time = time.time()
+        for line in process.stdout:
+            # 检查是否被新安装覆盖，是则杀掉子进程退出
+            if generation is not None and generation != install_generation:
+                process.kill()
+                return False, "已被新安装取消"
+            line = line.strip()
+            if line:
+                output_lines.append(line)
+                # 每2秒或遇到重要信息时输出日志
+                now = time.time()
+                if now - last_log_time > 2 or "Pulling" in line or "Downloaded" in line or "Pull complete" in line:
+                    log(line[:100])  # 截断过长的行
+                    last_log_time = now
+        process.wait(timeout=timeout)
+        if process.returncode != 0:
+            log(f"命令返回码: {process.returncode}")
+            return False, "\n".join(output_lines)
+        return True, "\n".join(output_lines)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        log("命令超时")
+        return False, "命令执行超时"
+    except Exception as e:
+        log(f"执行异常: {str(e)}")
         return False, str(e)
 
 
@@ -324,7 +367,40 @@ def install_docker():
         return False
     run_command("systemctl start docker")
     run_command("systemctl enable docker")
+    # 只有新安装 Docker 时才自动配置镜像加速
+    configure_docker_mirrors()
     return True
+
+
+def configure_docker_mirrors():
+    """配置Docker镜像加速（大陆服务器必须）"""
+    daemon_json = "/etc/docker/daemon.json"
+    # 检查是否已配置
+    if os.path.exists(daemon_json):
+        try:
+            with open(daemon_json, "r") as f:
+                content = f.read()
+                if "registry-mirrors" in content:
+                    log("Docker镜像加速已配置")
+                    return
+        except:
+            pass
+    log("配置Docker镜像加速...")
+    mirror_config = '''{
+  "registry-mirrors": [
+    "https://docker.1panel.live",
+    "https://dockerproxy.cn",
+    "https://docker.m.daocloud.io"
+  ]
+}'''
+    try:
+        with open(daemon_json, "w") as f:
+            f.write(mirror_config)
+        run_command("systemctl daemon-reload", quiet=True)
+        run_command("systemctl restart docker", quiet=True)
+        log("Docker镜像加速配置完成")
+    except Exception as e:
+        log(f"配置镜像加速失败: {e}")
 
 
 def install_nodejs():
@@ -350,7 +426,7 @@ def install_pm2():
         log("PM2已安装")
         return True
     log("安装PM2...")
-    success, _ = run_command("npm install -g pm2")
+    success, _ = run_command("npm install -g pm2 --registry=https://registry.npmmirror.com")
     return success
 
 
@@ -359,13 +435,36 @@ def deploy_astrbot():
     log("部署AstrBot + NapCat...")
     astrbot_dir = "/opt/astrbot"
     run_command(f"mkdir -p {astrbot_dir}")
-    yml_url = "https://raw.githubusercontent.com/NapNeko/NapCat-Docker/main/compose/astrbot.yml"
-    success, _ = run_command(f"wget -O astrbot.yml {yml_url}", cwd=astrbot_dir)
+    # 优先使用镜像（大陆服务器 GitHub Raw 超时）
+    yml_mirror = "https://gh.llkk.cc/https://raw.githubusercontent.com/NapNeko/NapCat-Docker/main/compose/astrbot.yml"
+    yml_direct = "https://raw.githubusercontent.com/NapNeko/NapCat-Docker/main/compose/astrbot.yml"
+    success, _ = run_command(f"wget -O astrbot.yml {yml_mirror}", cwd=astrbot_dir)
     if not success:
-        success, _ = run_command(f"curl -o astrbot.yml {yml_url}", cwd=astrbot_dir)
+        success, _ = run_command(f"curl -o astrbot.yml {yml_mirror}", cwd=astrbot_dir)
+    if not success:
+        # 镜像失败，尝试直连
+        success, _ = run_command(f"wget -O astrbot.yml {yml_direct}", cwd=astrbot_dir)
+    if not success:
+        success, _ = run_command(f"curl -o astrbot.yml {yml_direct}", cwd=astrbot_dir)
     if not success:
         log("下载astrbot.yml失败")
         return False
+    # 先拉取镜像
+    log("拉取Docker镜像...")
+    # 使用普通命令拉取，避免 stream 模式的 IO 开销
+    pull_ok, output = run_command("docker compose -f astrbot.yml pull --quiet", cwd=astrbot_dir)
+    if not pull_ok:
+        pull_ok, output = run_command("docker-compose -f astrbot.yml pull --quiet", cwd=astrbot_dir)
+    if not pull_ok:
+        # 静默模式失败，用详细模式重试看具体错误
+        log("静默拉取失败，尝试详细模式...")
+        pull_ok, _ = run_command_stream("docker compose -f astrbot.yml pull", cwd=astrbot_dir, generation=install_generation)
+        if not pull_ok:
+            pull_ok, _ = run_command_stream("docker-compose -f astrbot.yml pull", cwd=astrbot_dir, generation=install_generation)
+    if not pull_ok:
+        log("Docker镜像拉取失败，请检查网络或更换Docker镜像源")
+        return False
+    # 启动容器
     log("启动Docker容器...")
     success, _ = run_command("docker compose -f astrbot.yml up -d", cwd=astrbot_dir)
     if not success:
@@ -377,24 +476,33 @@ def deploy_sillytavern():
     """部署SillyTavern"""
     log("部署SillyTavern...")
     tavern_dir = "/opt/sillytavern"
+    package_json = os.path.join(tavern_dir, "package.json")
+    # 检查 package.json 是否存在，目录存在但文件不存在说明之前克隆失败
+    if os.path.exists(tavern_dir) and not os.path.exists(package_json):
+        log("检测到不完整的 SillyTavern 目录，清理后重新克隆...")
+        run_command(f"rm -rf {tavern_dir}")
     if not os.path.exists(tavern_dir):
+        log("克隆 SillyTavern 仓库...")
         success, _ = run_command(
-            f"git clone https://gh.llkk.cc/https://github.com/SillyTavern/SillyTavern.git {tavern_dir}"
+            f"git clone --depth 1 https://gh.llkk.cc/https://github.com/SillyTavern/SillyTavern.git {tavern_dir}"
         )
         if not success:
             success, _ = run_command(
-                f"git clone https://github.com/SillyTavern/SillyTavern.git {tavern_dir}"
+                f"git clone --depth 1 https://github.com/SillyTavern/SillyTavern.git {tavern_dir}"
             )
         if not success:
+            log("SillyTavern 仓库克隆失败")
             return False
     log("安装npm依赖...")
     install_success = False
+    # 使用淘宝镜像加速 npm，大陆服务器更快
+    npm_cmd = "npm install --no-audit --no-fund --loglevel=error --registry=https://registry.npmmirror.com"
     for attempt in range(3):
         if attempt > 0:
             log(f"npm install 重试第 {attempt} 次...")
             run_command("rm -rf node_modules", cwd=tavern_dir)
             run_command("npm cache clean --force", cwd=tavern_dir)
-        success, _ = run_command("npm install --no-audit --no-fund --loglevel=error", cwd=tavern_dir)
+        success, _ = run_command(npm_cmd, cwd=tavern_dir)
         if success:
             install_success = True
             break
@@ -405,7 +513,8 @@ def deploy_sillytavern():
     # 关键：必须包含 securityOverride: true，否则 listen:true + whitelistMode:false 时
     # SillyTavern 的 logSecurityAlert() 会直接 process.exit(1) 杀死进程
     log("配置SillyTavern...")
-    multi_user = str(config['enable_multi_user']).lower()
+    multi_user = str(config.get('enable_multi_user', True)).lower()
+    log(f"多用户模式设置: enableUserAccounts={multi_user}")
     config_content = f"""dataRoot: ./data
 listen: true
 listenAddress:
@@ -441,8 +550,8 @@ disableCsrfProtection: false
         cwd=tavern_dir
     )
     if success:
-        run_command("pm2 save")
-        run_command("pm2 startup 2>/dev/null || true")
+        run_command("pm2 save", quiet=True)
+        run_command("pm2 startup 2>/dev/null || true", quiet=True)
         time.sleep(3)
         alive, status_output = run_command("pm2 show sillytavern")
         if alive and "online" in status_output.lower():
@@ -489,9 +598,13 @@ def configure_firewall():
     log("防火墙配置完成")
 
 
-def do_install():
-    """执行安装"""
+def do_install(generation):
+    """执行安装。generation 用于检测是否被新的安装请求覆盖。"""
     global install_status
+
+    def cancelled():
+        return generation != install_generation
+
     try:
         install_status["stage"] = "installing"
 
@@ -500,51 +613,76 @@ def do_install():
         log("更新系统包...")
         run_command("apt-get update")
 
+        if cancelled(): return
         install_status["progress"] = 15
         install_status["message"] = "安装Docker..."
         if not install_docker():
             raise Exception("Docker安装失败")
 
+        if cancelled(): return
         install_status["progress"] = 30
         install_status["message"] = "安装Node.js..."
         if not install_nodejs():
             raise Exception("Node.js安装失败")
 
+        if cancelled(): return
         install_status["progress"] = 40
         install_status["message"] = "安装PM2..."
         if not install_pm2():
             raise Exception("PM2安装失败")
 
-        install_status["progress"] = 50
-        install_status["message"] = "部署AstrBot + NapCat..."
-        if not deploy_astrbot():
-            raise Exception("AstrBot部署失败")
-
-        # 等待 NapCat 容器初始化完成后获取 token
-        install_status["progress"] = 65
-        install_status["message"] = "获取NapCat登录Token..."
-        log("等待NapCat容器初始化...")
+        if cancelled(): return
         napcat_token = ""
-        for _ in range(10):  # 最多等30秒
-            time.sleep(3)
-            napcat_token = get_napcat_token()
-            if napcat_token:
-                log(f"NapCat WebUI Token: {napcat_token}")
-                break
-        if not napcat_token:
-            log("未能自动获取NapCat Token，请手动查看: cat /opt/astrbot/napcat/config/webui.json")
-        config["napcat_token"] = napcat_token
+        if config.get("install_astrbot", True):
+            # 先验证 Docker Hub 连通性，不通就直接报错让用户换源
+            install_status["progress"] = 45
+            install_status["message"] = "检测 Docker Hub 连通性..."
+            log("检测 Docker Hub 连通性...")
+            docker_ok, _ = run_command(
+                "timeout 10 curl -s --connect-timeout 5 https://registry-1.docker.io/v2/ || "
+                "timeout 10 curl -s --connect-timeout 5 https://hub.docker.com/",
+                quiet=True
+            )
+            if not docker_ok:
+                log("Docker Hub 连接失败，请先配置 Docker 镜像加速或检查 DNS")
+                raise Exception("Docker Hub 连接失败，请换源后重试")
 
-        install_status["progress"] = 70
-        install_status["message"] = "部署SillyTavern..."
-        if not deploy_sillytavern():
-            raise Exception("SillyTavern部署失败")
+            install_status["progress"] = 50
+            install_status["message"] = "部署AstrBot + NapCat..."
+            if not deploy_astrbot():
+                raise Exception("AstrBot部署失败")
 
-        if config["install_plugins"]:
-            install_status["progress"] = 85
-            install_status["message"] = "安装插件..."
-            install_astrbot_plugins(ASTRBOT_PLUGINS)
+            # 等待 NapCat 容器初始化完成后获取 token
+            install_status["progress"] = 65
+            install_status["message"] = "获取NapCat登录Token..."
+            log("等待NapCat容器初始化...")
+            for _ in range(10):  # 最多等30秒
+                time.sleep(3)
+                napcat_token = get_napcat_token()
+                if napcat_token:
+                    log(f"NapCat WebUI Token: {napcat_token}")
+                    break
+            if not napcat_token:
+                log("未能自动获取NapCat Token，请手动查看: cat /opt/astrbot/napcat/config/webui.json")
+            config["napcat_token"] = napcat_token
 
+            if config.get("install_plugins", False):
+                install_status["progress"] = 70
+                install_status["message"] = "安装插件..."
+                install_astrbot_plugins(ASTRBOT_PLUGINS)
+        else:
+            log("跳过 AstrBot 安装")
+
+        if cancelled(): return
+        if config.get("install_tavern", True):
+            install_status["progress"] = 80
+            install_status["message"] = "部署SillyTavern..."
+            if not deploy_sillytavern():
+                raise Exception("SillyTavern部署失败")
+        else:
+            log("跳过 SillyTavern 安装")
+
+        if cancelled(): return
         install_status["progress"] = 95
         install_status["message"] = "配置防火墙..."
         configure_firewall()
@@ -553,9 +691,20 @@ def do_install():
         install_status["message"] = "安装完成！"
         install_status["stage"] = "completed"
 
-        # 获取服务器IP并持久化
-        ok, ip_out = run_command("curl -s --connect-timeout 5 ifconfig.me || curl -s --connect-timeout 5 ip.sb", quiet=True)
-        server_ip = ip_out.strip() if ok else "你的服务器IP"
+        # 获取服务器IP并持久化（多种方法备用）
+        server_ip = ""
+        for ip_cmd in [
+            "curl -s --connect-timeout 3 ifconfig.me",
+            "curl -s --connect-timeout 3 ip.sb",
+            "curl -s --connect-timeout 3 ipinfo.io/ip",
+            "hostname -I | awk '{print $1}'"
+        ]:
+            ok, ip_out = run_command(ip_cmd, quiet=True)
+            if ok and ip_out.strip() and ip_out.strip() != "--":
+                server_ip = ip_out.strip()
+                break
+        if not server_ip:
+            server_ip = "你的服务器IP"
         config["server_ip"] = server_ip
         config["installed"] = True
         save_config()
@@ -597,8 +746,7 @@ def do_install():
 @app.route("/login")
 def login_page():
     """登录页面"""
-    if not config.get("token"):
-        return redirect(url_for("index"))
+    # 无论是否设置 token，都显示登录页（login.html 会根据情况显示设置弹窗或登录表单）
     return render_template("login.html")
 
 
@@ -812,11 +960,47 @@ def get_plugins():
     return jsonify(ASTRBOT_PLUGINS)
 
 
+@app.route("/api/docker/mirror", methods=["POST"])
+@login_required
+def set_docker_mirror():
+    """配置 Docker 镜像加速"""
+    data = request.json or {}
+    mirror = data.get("mirror", "1panel")
+    daemon_json = "/etc/docker/daemon.json"
+    try:
+        if mirror == "direct":
+            # 海外服务器：清除镜像加速，直连 Docker Hub
+            if os.path.exists(daemon_json):
+                os.remove(daemon_json)
+            run_command("systemctl daemon-reload", quiet=True)
+            run_command("systemctl restart docker", quiet=True)
+            time.sleep(3)  # 等待 Docker 完全重启
+            return jsonify({"success": True, "message": "已切换为直连 Docker Hub（无镜像加速）"})
+        mirrors_map = {
+            "1panel": ["https://docker.1panel.live"],
+            "daocloud": ["https://docker.m.daocloud.io"],
+            "aliyun": ["https://docker.mirrors.ustc.edu.cn", "https://hub-mirror.c.163.com"]
+        }
+        mirrors = mirrors_map.get(mirror, mirrors_map["1panel"])
+        mirror_config = json.dumps({"registry-mirrors": mirrors}, indent=2)
+        with open(daemon_json, "w") as f:
+            f.write(mirror_config)
+        run_command("systemctl daemon-reload", quiet=True)
+        run_command("systemctl restart docker", quiet=True)
+        time.sleep(3)  # 等待 Docker 完全重启
+        return jsonify({"success": True, "message": f"已配置 {mirror} 镜像"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/install", methods=["POST"])
 @login_required
 def start_install():
     """开始安装"""
     global install_status
+    global install_generation
+    install_generation += 1
+    current_gen = install_generation
     install_status = {
         "stage": "installing",
         "progress": 0,
@@ -825,6 +1009,8 @@ def start_install():
         "results": {}
     }
     data = request.json or {}
+    config["install_tavern"] = data.get("install_tavern", True)
+    config["install_astrbot"] = data.get("install_astrbot", True)
     if "tavern_port" in data:
         config["tavern_port"] = int(data["tavern_port"])
     if "install_plugins" in data:
@@ -835,7 +1021,7 @@ def start_install():
         for i, plugin in enumerate(ASTRBOT_PLUGINS):
             plugin["selected"] = i in data["selected_plugins"]
     save_config()
-    thread = threading.Thread(target=do_install)
+    thread = threading.Thread(target=do_install, args=(current_gen,), daemon=True)
     thread.start()
     return jsonify({"success": True})
 

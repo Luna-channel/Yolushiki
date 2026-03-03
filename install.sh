@@ -78,6 +78,15 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# 清理可能残留的旧管理面板进程（用户重跑脚本时避免9999端口冲突）
+if command -v pm2 &> /dev/null; then
+    pm2 stop yolushiki 2>/dev/null || true
+    pm2 delete yolushiki 2>/dev/null || true
+fi
+pkill -f "python3.*app.py.*--port.*9999" 2>/dev/null || true
+fuser -k 9999/tcp 2>/dev/null || true
+sleep 1
+
 echo -e "${BLUE}[1/5]${NC} 检测系统环境..."
 sleep 0.5
 
@@ -193,35 +202,39 @@ mkdir -p "$YOLUSHIKI_DIR/templates"
 # 获取脚本所在目录（安装包目录）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo -e "      ${CYAN}💡${NC}  复制管理面板文件..."
-
 mkdir -p "$YOLUSHIKI_DIR/static"
 mkdir -p "$YOLUSHIKI_DIR/templates"
 
-# 从安装包目录复制文件到目标目录
-COPY_OK=1
-
-if [ -f "$SCRIPT_DIR/app.py" ]; then
-    cp "$SCRIPT_DIR/app.py" "$YOLUSHIKI_DIR/app.py" || COPY_OK=0
+# 检查是否需要复制（源目录和目标目录不同时才复制）
+if [ "$SCRIPT_DIR" = "$YOLUSHIKI_DIR" ]; then
+    echo -e "      ${GREEN}✓${NC}  脚本已在目标目录，跳过复制"
+    COPY_OK=1
 else
-    echo -e "      ${RED}✗${NC}  找不到 app.py"
-    COPY_OK=0
-fi
+    echo -e "      ${CYAN}💡${NC}  复制管理面板文件..."
+    COPY_OK=1
 
-if [ -f "$SCRIPT_DIR/static/logo.png" ]; then
-    cp "$SCRIPT_DIR/static/logo.png" "$YOLUSHIKI_DIR/static/logo.png" || COPY_OK=0
-else
-    echo -e "      ${YELLOW}⚠${NC}  找不到 logo.png（非必须）"
-fi
-
-for tpl in login.html index.html tutorial_napcat.html tutorial_astrbot.html tutorial_tavern.html; do
-    if [ -f "$SCRIPT_DIR/templates/$tpl" ]; then
-        cp "$SCRIPT_DIR/templates/$tpl" "$YOLUSHIKI_DIR/templates/$tpl" || COPY_OK=0
+    if [ -f "$SCRIPT_DIR/app.py" ]; then
+        cp "$SCRIPT_DIR/app.py" "$YOLUSHIKI_DIR/app.py" || COPY_OK=0
     else
-        echo -e "      ${RED}✗${NC}  找不到 templates/$tpl"
+        echo -e "      ${RED}✗${NC}  找不到 app.py"
         COPY_OK=0
     fi
-done
+
+    if [ -f "$SCRIPT_DIR/static/logo.png" ]; then
+        cp "$SCRIPT_DIR/static/logo.png" "$YOLUSHIKI_DIR/static/logo.png" || COPY_OK=0
+    else
+        echo -e "      ${YELLOW}⚠${NC}  找不到 logo.png（非必须）"
+    fi
+
+    for tpl in login.html index.html tutorial_napcat.html tutorial_astrbot.html tutorial_tavern.html; do
+        if [ -f "$SCRIPT_DIR/templates/$tpl" ]; then
+            cp "$SCRIPT_DIR/templates/$tpl" "$YOLUSHIKI_DIR/templates/$tpl" || COPY_OK=0
+        else
+            echo -e "      ${RED}✗${NC}  找不到 templates/$tpl"
+            COPY_OK=0
+        fi
+    done
+fi
 
 if [ "$COPY_OK" -eq 0 ]; then
     echo -e "      ${RED}✗${NC}  部分文件复制失败"
@@ -350,7 +363,7 @@ def install_pm2():
         log("PM2已安装")
         return True
     log("安装PM2...")
-    success, _ = run_command("npm install -g pm2")
+    success, _ = run_command("npm install -g pm2 --registry=https://registry.npmmirror.com")
     return success
 
 def deploy_astrbot():
@@ -420,14 +433,15 @@ def deploy_sillytavern():
         if not success:
             return False
     log("安装npm依赖...")
-    # 重试逻辑（参考SillyTavern-Termux一键包）
+    # 使用淘宝镜像加速 npm
+    npm_cmd = "npm install --no-audit --no-fund --loglevel=error --registry=https://registry.npmmirror.com"
     install_success = False
     for attempt in range(3):
         if attempt > 0:
             log(f"npm install 重试第 {attempt} 次...")
             run_command("rm -rf node_modules", cwd=tavern_dir)
             run_command("npm cache clean --force", cwd=tavern_dir)
-        success, _ = run_command("npm install --no-audit --no-fund --loglevel=error", cwd=tavern_dir)
+        success, _ = run_command(npm_cmd, cwd=tavern_dir)
         if success:
             install_success = True
             break
@@ -772,32 +786,32 @@ echo ""
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# 首次启动：前台运行让用户看到输出（用户完成首次设置后 Ctrl+C 退出）
-# 然后用 PM2 注册为常驻服务
-echo -e "${YELLOW}首次启动中... 完成 Token 设置和安装后，按 Ctrl+C 退出${NC}"
-echo -e "${YELLOW}之后管理面板将由 PM2 自动保持运行${NC}"
-echo ""
-
-cd "$YOLUSHIKI_DIR"
-python3 app.py --port $INSTALLER_PORT --host 0.0.0.0
-
-# 用户 Ctrl+C 退出后，用 PM2 注册为常驻服务（如果 PM2 已安装）
-echo ""
-echo -e "${BLUE}正在将夜鹭机注册为常驻服务...${NC}"
+# 启动夜鹭机管理面板
+echo -e "${BLUE}正在启动夜鹭机管理面板...${NC}"
 
 if command -v pm2 &> /dev/null; then
-    pm2 delete yolushiki 2>/dev/null || true
-    pm2 start "$YOLUSHIKI_DIR/app.py" --name "yolushiki" --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0
-    pm2 save
-    pm2 startup 2>/dev/null || true
-    echo -e "${GREEN}✓${NC} 夜鹭机管理面板已注册为 PM2 常驻服务"
+    # 检查 PM2 中是否已有 yolushiki 服务
+    if pm2 describe yolushiki > /dev/null 2>&1; then
+        pm2 stop yolushiki > /dev/null 2>&1 || true
+        pm2 start yolushiki > /dev/null 2>&1
+        echo -e "${GREEN}✓${NC} 夜鹭机管理面板已重启"
+    else
+        pm2 start "$YOLUSHIKI_DIR/app.py" --name "yolushiki" --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0 > /dev/null 2>&1
+        pm2 save > /dev/null 2>&1
+        pm2 startup > /dev/null 2>&1 || true
+        echo -e "${GREEN}✓${NC} 夜鹭机管理面板已启动"
+    fi
     echo -e "   访问地址: ${WEBUI_URL}"
-    echo -e "   管理命令: pm2 status / pm2 logs yolushiki / pm2 restart yolushiki"
 else
-    echo -e "${YELLOW}⚠${NC} PM2 尚未安装（安装服务后将自动配置）"
-    echo -e "   请完成安装后手动运行以下命令注册常驻服务："
-    echo -e "   ${CYAN}pm2 start $YOLUSHIKI_DIR/app.py --name yolushiki --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0${NC}"
-    echo -e "   ${CYAN}pm2 save && pm2 startup${NC}"
+    echo -e "${YELLOW}⚠${NC} PM2 尚未安装，使用后台模式启动..."
+    # 杀掉可能存在的旧进程
+    pkill -f "python3 app.py --port $INSTALLER_PORT" 2>/dev/null || true
+    sleep 1
+    cd "$YOLUSHIKI_DIR"
+    nohup python3 app.py --port $INSTALLER_PORT --host 0.0.0.0 > /tmp/yolushiki.log 2>&1 &
+    echo -e "${GREEN}✓${NC} 夜鹭机管理面板已在后台启动"
+    echo -e "   访问地址: ${WEBUI_URL}"
+    echo -e "   日志文件: /tmp/yolushiki.log"
 fi
 
 echo ""

@@ -68,6 +68,15 @@
             color: var(--text-primary);
         }
         .topbar-btn i { width: 16px; height: 16px; }
+        .topbar-btn-danger {
+            background: rgba(220, 53, 69, 0.15);
+            color: #dc3545;
+            padding: 8px;
+        }
+        .topbar-btn-danger:hover {
+            background: #dc3545;
+            color: #fff;
+        }
 
         /* ===== 容器 ===== */
         .container {
@@ -337,6 +346,35 @@
         }
         .log-box .log-line { margin-bottom: 4px; }
 
+        /* 超时/错误面板 */
+        .timeout-panel, .error-panel {
+            margin-top: 16px;
+            padding: 16px;
+            border-radius: 8px;
+            background: rgba(212, 160, 23, 0.1);
+            border: 1px solid var(--accent-yellow);
+        }
+        .error-panel {
+            background: rgba(192, 57, 43, 0.1);
+            border-color: var(--accent-red);
+        }
+        .timeout-title, .error-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .timeout-title { color: var(--accent-yellow); }
+        .error-title { color: var(--accent-red); }
+        .mirror-buttons, .error-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .hidden { display: none !important; }
+
         /* 隐藏区 */
         .section { display: none; }
         .section.active { display: block; }
@@ -447,8 +485,8 @@
             <span>夜鹭机</span>
         </div>
         <div class="topbar-actions">
-            <button class="topbar-btn" onclick="doLogout()">
-                <i data-lucide="log-out"></i> 退出
+            <button class="topbar-btn topbar-btn-danger" onclick="confirmShutdown()">
+                <i data-lucide="power"></i>
             </button>
         </div>
     </div>
@@ -487,29 +525,39 @@
             </div>
 
             <div class="card">
-                <h2><i data-lucide="settings"></i> 安装选项</h2>
+                <h2><i data-lucide="warehouse"></i> SillyTavern</h2>
                 <div class="checkbox-group">
-                    <input type="checkbox" id="enable-multiuser" checked>
-                    <label for="enable-multiuser">启用 SillyTavern 多用户模式（推荐）</label>
+                    <input type="checkbox" id="install-tavern" checked>
+                    <label for="install-tavern">安装 SillyTavern</label>
                 </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="install-plugins" checked>
-                    <label for="install-plugins">安装夜鹭一键包（预装AstrBot插件）</label>
+                <div class="checkbox-group" id="tavern-mode-group" style="margin-left: 24px;">
+                    <input type="checkbox" id="enable-multiuser" checked>
+                    <label for="enable-multiuser">启用多用户模式（推荐）</label>
                 </div>
             </div>
 
-            <div class="card" id="plugins-card">
-                <h2><i data-lucide="plug"></i> 插件选择</h2>
-                <div class="plugin-list">
-                    {% for plugin in plugins %}
-                    <label class="plugin-item">
-                        <input type="checkbox" name="plugin" value="{{ loop.index0 }}" {% if plugin.selected %}checked{% endif %}>
-                        <div class="info">
-                            <div class="name">{{ plugin.name }}</div>
-                            <div class="desc">{{ plugin.description }}</div>
-                        </div>
-                    </label>
-                    {% endfor %}
+            <div class="card">
+                <h2><i data-lucide="bot"></i> AstrBot</h2>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="install-astrbot" checked>
+                    <label for="install-astrbot">安装 AstrBot（含 NapCat）</label>
+                </div>
+                <div id="astrbot-plugins-section" style="margin-left: 24px; margin-top: 12px;">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="install-plugins" checked>
+                        <label for="install-plugins">预装 AstrBot 插件</label>
+                    </div>
+                    <div class="plugin-list" id="plugins-list" style="margin-top: 8px;">
+                        {% for plugin in plugins %}
+                        <label class="plugin-item">
+                            <input type="checkbox" name="plugin" value="{{ loop.index0 }}" {% if plugin.selected %}checked{% endif %}>
+                            <div class="info">
+                                <div class="name">{{ plugin.name }}</div>
+                                <div class="desc">{{ plugin.description }}</div>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
 
@@ -523,12 +571,46 @@
         <!-- ========== 安装进度 ========== -->
         <div id="progress-section" class="section">
             <div class="card">
-                <h2><i data-lucide="package"></i> 正在安装（请耐心等待）</h2>
+                <h2><i data-lucide="package"></i> 正在安装（慢非常正常！可以去看看别的，过会儿再来。）</h2>
                 <div class="progress-bar-container">
                     <div class="progress-bar" id="progress-bar"></div>
                 </div>
                 <div class="progress-text" id="progress-text">准备中...</div>
                 <div class="log-box" id="log-box"></div>
+                
+                <!-- 超时提示面板 -->
+                <div id="timeout-panel" class="timeout-panel hidden">
+                    <div class="timeout-title"><i data-lucide="alert-triangle"></i> 检测到下载缓慢/超时</div>
+                    <p>Docker 镜像下载可能因网络问题卡住，点击下方按钮配置镜像加速：</p>
+                    <div class="mirror-buttons">
+                        <button class="btn btn-secondary" onclick="applyMirror('1panel')">1Panel 镜像</button>
+                        <button class="btn btn-secondary" onclick="applyMirror('daocloud')">DaoCloud 镜像</button>
+                        <button class="btn btn-secondary" onclick="applyMirror('aliyun')">阿里云镜像</button>
+                        <button class="btn btn-secondary" onclick="applyMirror('direct')">直连 Docker Hub（海外）</button>
+                    </div>
+                </div>
+                
+                <!-- 安装失败面板 -->
+                <div id="error-panel" class="error-panel hidden">
+                    <div class="error-title"><i data-lucide="x-circle"></i> 安装失败</div>
+                    <p id="error-message">未知错误</p>
+                    <!-- Docker 拉取失败时显示换源选项 -->
+                    <div id="error-mirror-panel" class="hidden" style="margin-top:12px;padding:12px;background:rgba(212,160,23,0.1);border:1px solid var(--accent-yellow);border-radius:8px;">
+                        <div style="color:var(--accent-yellow);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                            <i data-lucide="alert-triangle" style="width:16px;height:16px;"></i> Docker 镜像拉取失败，建议先换源再重试
+                        </div>
+                        <div class="mirror-buttons">
+                            <button class="btn btn-secondary" onclick="applyMirror('1panel')">1Panel 镜像</button>
+                            <button class="btn btn-secondary" onclick="applyMirror('daocloud')">DaoCloud 镜像</button>
+                            <button class="btn btn-secondary" onclick="applyMirror('aliyun')">阿里云镜像</button>
+                            <button class="btn btn-secondary" onclick="applyMirror('direct')">直连 Docker Hub（海外）</button>
+                        </div>
+                    </div>
+                    <div class="error-buttons">
+                        <button class="btn btn-primary" onclick="retryInstall()"><i data-lucide="refresh-cw"></i> 重试安装</button>
+                        <button class="btn btn-secondary" onclick="showSetup()"><i data-lucide="arrow-left"></i> 返回配置</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -703,6 +785,33 @@
         // ===== 初始化 =====
         document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
+            
+            // 安装选项联动
+            const installTavern = document.getElementById('install-tavern');
+            const tavernModeGroup = document.getElementById('tavern-mode-group');
+            const installAstrbot = document.getElementById('install-astrbot');
+            const astrbotPluginsSection = document.getElementById('astrbot-plugins-section');
+            const installPlugins = document.getElementById('install-plugins');
+            const pluginsList = document.getElementById('plugins-list');
+            
+            if (installTavern && tavernModeGroup) {
+                installTavern.addEventListener('change', () => {
+                    tavernModeGroup.style.display = installTavern.checked ? 'flex' : 'none';
+                });
+            }
+            
+            if (installAstrbot && astrbotPluginsSection) {
+                installAstrbot.addEventListener('change', () => {
+                    astrbotPluginsSection.style.display = installAstrbot.checked ? 'block' : 'none';
+                });
+            }
+            
+            if (installPlugins && pluginsList) {
+                installPlugins.addEventListener('change', () => {
+                    pluginsList.style.display = installPlugins.checked ? 'block' : 'none';
+                });
+            }
+            
             try {
                 const res = await fetch('/api/auth/check');
                 const data = await res.json();
@@ -739,6 +848,8 @@
 
         // ===== 安装向导 =====
         function startInstall() {
+            const installTavern = document.getElementById('install-tavern').checked;
+            const installAstrbot = document.getElementById('install-astrbot').checked;
             const tavernPort = parseInt(document.getElementById('tavern-port').value);
             const installPlugins = document.getElementById('install-plugins').checked;
             const enableMultiuser = document.getElementById('enable-multiuser').checked;
@@ -746,7 +857,12 @@
             document.querySelectorAll('input[name="plugin"]:checked').forEach(cb => {
                 selectedPlugins.push(parseInt(cb.value));
             });
-            if (tavernPort < 1024 || tavernPort > 65535) {
+            
+            if (!installTavern && !installAstrbot) {
+                alert('请至少选择一项安装内容');
+                return;
+            }
+            if (installTavern && (tavernPort < 1024 || tavernPort > 65535)) {
                 alert('端口必须在 1024-65535 之间');
                 return;
             }
@@ -755,8 +871,10 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    install_tavern: installTavern,
+                    install_astrbot: installAstrbot,
                     tavern_port: tavernPort,
-                    install_plugins: installPlugins,
+                    install_plugins: installPlugins && installAstrbot,
                     enable_multi_user: enableMultiuser,
                     selected_plugins: selectedPlugins
                 })
@@ -764,29 +882,93 @@
             installInterval = setInterval(checkInstallStatus, 1000);
         }
 
+        let lastProgress = 0;
+        let stuckCount = 0;
+        
         function checkInstallStatus() {
             fetch('/api/status')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('progress-bar').style.width = data.progress + '%';
-                    document.getElementById('progress-text').textContent = data.message + ' (' + data.progress + '%)';
+                    const progress = data.progress || 0;
+                    const message = data.message || '准备中...';
+                    document.getElementById('progress-bar').style.width = progress + '%';
+                    document.getElementById('progress-text').textContent = message + ' (' + progress + '%)';
                     const logBox = document.getElementById('log-box');
-                    logBox.innerHTML = data.logs.map(l => '<div class="log-line">' + l + '</div>').join('');
+                    const logs = data.logs || [];
+                    logBox.innerHTML = logs.map(l => '<div class="log-line">' + l + '</div>').join('');
                     logBox.scrollTop = logBox.scrollHeight;
+                    
+                    // 超时检测：进度卡住超过60秒显示提示
+                    if (data.progress === lastProgress && data.progress > 0 && data.progress < 100) {
+                        stuckCount++;
+                        if (stuckCount > 60) {  // 60秒没动
+                            document.getElementById('timeout-panel').classList.remove('hidden');
+                        }
+                    } else {
+                        stuckCount = 0;
+                        lastProgress = data.progress;
+                    }
+                    
                     if (data.stage === 'completed') {
                         clearInterval(installInterval);
+                        document.getElementById('timeout-panel').classList.add('hidden');
+                        document.getElementById('error-panel').classList.add('hidden');
                         setTimeout(() => showDashboard(), 1500);
                     } else if (data.stage === 'error') {
                         clearInterval(installInterval);
-                        alert('安装失败: ' + data.message);
+                        document.getElementById('timeout-panel').classList.add('hidden');
+                        document.getElementById('error-panel').classList.remove('hidden');
+                        document.getElementById('error-message').textContent = data.message;
+                        // Docker 相关错误时显示换源按钮
+                        const msg = data.message.toLowerCase();
+                        const logs = (data.logs || []).join(' ').toLowerCase();
+                        const isDockerErr = msg.includes('docker') || msg.includes('astrbot') || 
+                            logs.includes('pull access denied') || logs.includes('镜像') || logs.includes('timeout');
+                        const mirrorPanel = document.getElementById('error-mirror-panel');
+                        if (isDockerErr && mirrorPanel) {
+                            mirrorPanel.classList.remove('hidden');
+                            lucide.createIcons();
+                        } else if (mirrorPanel) {
+                            mirrorPanel.classList.add('hidden');
+                        }
                     }
                 });
         }
-
-        // 插件区域显示/隐藏
-        document.getElementById('install-plugins')?.addEventListener('change', function() {
-            document.getElementById('plugins-card').style.display = this.checked ? 'block' : 'none';
-        });
+        
+        function retryInstall() {
+            document.getElementById('error-panel').classList.add('hidden');
+            document.getElementById('timeout-panel').classList.add('hidden');
+            lastProgress = 0;
+            stuckCount = 0;
+            startInstall();
+        }
+        
+        async function applyMirror(mirror) {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '配置中...';
+            try {
+                const res = await fetch('/api/docker/mirror', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mirror: mirror })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('镜像配置成功，请点击"重试安装"');
+                    document.getElementById('timeout-panel').classList.add('hidden');
+                    document.getElementById('error-panel').classList.remove('hidden');
+                    document.getElementById('error-message').textContent = '已配置镜像加速，请重试';
+                } else {
+                    alert('配置失败: ' + (data.error || '未知错误'));
+                }
+            } catch(e) {
+                alert('网络错误');
+            }
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
 
         // ===== 仪表盘：服务状态 =====
         async function refreshStatus() {
@@ -856,7 +1038,11 @@
         let napCatTokenData = null;
 
         function openService(name) {
-            const ip = document.getElementById('sys-ip')?.textContent || CONFIG.server_ip || window.location.hostname;
+            let ip = document.getElementById('sys-ip')?.textContent;
+            // 跳过未加载的占位符
+            if (!ip || ip === '--' || ip === '未知') {
+                ip = CONFIG.server_ip || window.location.hostname;
+            }
             const portMap = {
                 napcat: CONFIG.napcat_port || 6099,
                 astrbot: CONFIG.astrbot_port || 6185,
@@ -974,10 +1160,37 @@
             document.getElementById('logs-modal').classList.add('hidden');
         }
 
-        // ===== 退出登录 =====
-        async function doLogout() {
+        // ===== 关闭夜鹭机 =====
+        function confirmShutdown() {
+            const cmd = 'bash /opt/yolushiki/install.sh';
+            const confirmed = confirm(
+                '⚠️ 你确定要关闭夜鹭机吗？\n\n' +
+                '关闭后，如需再次打开此界面，请在终端执行：\n\n' +
+                cmd
+            );
+            if (confirmed) {
+                doShutdown();
+            }
+        }
+
+        async function doShutdown() {
             await fetch('/api/auth/logout', { method: 'POST' });
-            window.location.href = '/login';
+            // 显示可复制的命令提示
+            document.body.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#1a1a2e;color:#fff;font-family:system-ui;">
+                    <h1 style="margin-bottom:20px;">夜鹭机已关闭</h1>
+                    <p style="margin-bottom:15px;color:#aaa;">如需重新打开，请在终端执行以下命令：</p>
+                    <code id="restart-cmd" style="background:#2d2d44;padding:15px 25px;border-radius:8px;cursor:pointer;font-size:16px;" onclick="copyCmd()">bash /opt/yolushiki/install.sh</code>
+                    <p style="margin-top:10px;color:#888;font-size:12px;">点击上方命令即可复制</p>
+                </div>
+                <script>
+                    function copyCmd() {
+                        navigator.clipboard.writeText('bash /opt/yolushiki/install.sh');
+                        document.getElementById('restart-cmd').style.background = '#3d5a3d';
+                        setTimeout(() => document.getElementById('restart-cmd').style.background = '#2d2d44', 1000);
+                    }
+                </script>
+            `;
         }
     </script>
 </body>
