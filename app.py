@@ -11,6 +11,8 @@ import subprocess
 import threading
 import time
 import functools
+import hashlib
+import base64
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 
 app = Flask(__name__)
@@ -552,13 +554,78 @@ disableCsrfProtection: false
     if success:
         run_command("pm2 save", quiet=True)
         run_command("pm2 startup 2>/dev/null || true", quiet=True)
-        time.sleep(3)
+        time.sleep(5)  # 等待 SillyTavern 初始化存储
         alive, status_output = run_command("pm2 show sillytavern")
         if alive and "online" in status_output.lower():
             log(f"SillyTavern 已在端口 {config['tavern_port']} 成功启动")
+            # 为 default-user 设置初始密码
+            set_sillytavern_password(tavern_dir)
         else:
             log("SillyTavern 可能未正常启动，请检查 pm2 logs sillytavern")
     return success
+
+
+def set_sillytavern_password(tavern_dir):
+    """为 SillyTavern 的 default-user 设置初始密码"""
+    import glob
+    storage_dir = os.path.join(tavern_dir, "data", "_storage")
+    
+    # 等待存储目录创建
+    for _ in range(10):
+        if os.path.exists(storage_dir):
+            break
+        time.sleep(1)
+    
+    if not os.path.exists(storage_dir):
+        log("SillyTavern 存储目录未创建，跳过密码设置")
+        return
+    
+    # 查找 default-user 的存储文件
+    user_files = glob.glob(os.path.join(storage_dir, "*.json"))
+    target_file = None
+    for f in user_files:
+        try:
+            with open(f, "r", encoding="utf-8") as fp:
+                data = json.load(fp)
+                if data.get("key") == "user:default-user":
+                    target_file = f
+                    break
+        except:
+            continue
+    
+    if not target_file:
+        log("未找到 default-user 存储文件，跳过密码设置")
+        return
+    
+    # 生成随机密码
+    password = secrets.token_urlsafe(12)  # 16字符的安全密码
+    
+    # 生成 salt 和 hash（与 SillyTavern 的 scrypt 算法兼容）
+    salt = base64.b64encode(os.urandom(16)).decode('utf-8')
+    password_hash = hashlib.scrypt(
+        password.encode('utf-8'),
+        salt=salt.encode('utf-8'),
+        n=16384, r=8, p=1, dklen=64
+    )
+    password_hash_b64 = base64.b64encode(password_hash).decode('utf-8')
+    
+    # 更新用户记录
+    try:
+        with open(target_file, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+        
+        data["value"]["password"] = password_hash_b64
+        data["value"]["salt"] = salt
+        
+        with open(target_file, "w", encoding="utf-8") as fp:
+            json.dump(data, fp, ensure_ascii=False)
+        
+        # 保存密码到配置
+        config["tavern_password"] = password
+        save_config()
+        log(f"SillyTavern 初始密码已设置: {password}")
+    except Exception as e:
+        log(f"设置 SillyTavern 密码失败: {e}")
 
 
 def install_astrbot_plugins(selected_plugins):
@@ -719,7 +786,8 @@ def do_install(generation):
             "napcat_url": napcat_url,
             "napcat_token": napcat_token,
             "astrbot_url": f"http://{server_ip}:{config['astrbot_port']}",
-            "tavern_url": f"http://{server_ip}:{config['tavern_port']}"
+            "tavern_url": f"http://{server_ip}:{config['tavern_port']}",
+            "tavern_password": config.get("tavern_password", "")
         }
 
         # 将夜鹭机管理面板自身注册为 PM2 常驻服务

@@ -487,13 +487,56 @@ disableCsrfProtection: false
         run_command("pm2 startup 2>/dev/null || true")
         # 等待几秒确认进程存活
         import time as _t
-        _t.sleep(3)
+        _t.sleep(5)
         alive, status_output = run_command("pm2 show sillytavern")
         if alive and "online" in status_output.lower():
             log(f"SillyTavern 已在端口 {config['tavern_port']} 成功启动")
+            set_sillytavern_password(tavern_dir)
         else:
             log("⚠ SillyTavern 可能未正常启动，请检查 pm2 logs sillytavern")
     return success
+
+def set_sillytavern_password(tavern_dir):
+    import glob, hashlib, base64
+    storage_dir = os.path.join(tavern_dir, "data", "_storage")
+    for _ in range(10):
+        if os.path.exists(storage_dir):
+            break
+        import time as _t2
+        _t2.sleep(1)
+    if not os.path.exists(storage_dir):
+        log("SillyTavern 存储目录未创建，跳过密码设置")
+        return
+    user_files = glob.glob(os.path.join(storage_dir, "*.json"))
+    target_file = None
+    for f in user_files:
+        try:
+            with open(f, "r", encoding="utf-8") as fp:
+                data = json.load(fp)
+                if data.get("key") == "user:default-user":
+                    target_file = f
+                    break
+        except:
+            continue
+    if not target_file:
+        log("未找到 default-user 存储文件，跳过密码设置")
+        return
+    password = secrets.token_urlsafe(12)
+    salt = base64.b64encode(os.urandom(16)).decode('utf-8')
+    password_hash = hashlib.scrypt(password.encode('utf-8'), salt=salt.encode('utf-8'), n=16384, r=8, p=1, dklen=64)
+    password_hash_b64 = base64.b64encode(password_hash).decode('utf-8')
+    try:
+        with open(target_file, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+        data["value"]["password"] = password_hash_b64
+        data["value"]["salt"] = salt
+        with open(target_file, "w", encoding="utf-8") as fp:
+            json.dump(data, fp, ensure_ascii=False)
+        config["tavern_password"] = password
+        save_config()
+        log(f"SillyTavern 初始密码已设置: {password}")
+    except Exception as e:
+        log(f"设置 SillyTavern 密码失败: {e}")
 
 def install_astrbot_plugins(selected_plugins):
     log("安装AstrBot插件...")

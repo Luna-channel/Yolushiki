@@ -776,6 +776,36 @@
         </div>
     </div>
 
+    <!-- ===== 酒馆初始密码弹窗 ===== -->
+    <div class="modal-overlay hidden" id="tavern-password-modal">
+        <div class="modal">
+            <h2><i data-lucide="key"></i> SillyTavern 初始密码</h2>
+            <div class="modal-success show" style="display:block;">
+                <strong>🎉 安装完成！</strong><br>
+                为了安全，已为您的酒馆设置初始密码。
+            </div>
+            <div class="input-group">
+                <label><i data-lucide="user"></i> 用户名</label>
+                <input type="text" value="default-user" readonly style="background:#0a1628;cursor:text;">
+            </div>
+            <div class="input-group">
+                <label><i data-lucide="lock"></i> 初始密码（请妥善保存）</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="tavern-init-password" readonly style="background:#0a1628;cursor:text;font-family:monospace;">
+                    <button class="btn btn-secondary" onclick="copyTavernPassword()" style="flex:none;padding:10px 16px;">
+                        <i data-lucide="copy" style="width:16px;height:16px;"></i>
+                    </button>
+                </div>
+            </div>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">
+                💡 登录后可在酒馆设置中修改密码
+            </p>
+            <div class="modal-btns">
+                <button class="btn btn-primary" onclick="closeTavernPasswordModal()">我已记住，进入管理面板</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ===== 全局变量 =====
         const CONFIG = {{ config | tojson }};
@@ -913,7 +943,12 @@
                         clearInterval(installInterval);
                         document.getElementById('timeout-panel').classList.add('hidden');
                         document.getElementById('error-panel').classList.add('hidden');
-                        setTimeout(() => showDashboard(), 1500);
+                        // 显示酒馆初始密码
+                        if (data.results && data.results.tavern_password) {
+                            showTavernPasswordModal(data.results.tavern_password);
+                        } else {
+                            setTimeout(() => showDashboard(), 1500);
+                        }
                     } else if (data.stage === 'error') {
                         clearInterval(installInterval);
                         document.getElementById('timeout-panel').classList.add('hidden');
@@ -1158,6 +1193,23 @@
         // ===== 日志弹窗 =====
         function hideLogsModal() {
             document.getElementById('logs-modal').classList.add('hidden');
+        }
+
+        // ===== 酒馆初始密码弹窗 =====
+        function showTavernPasswordModal(password) {
+            document.getElementById('tavern-init-password').value = password;
+            document.getElementById('tavern-password-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeTavernPasswordModal() {
+            document.getElementById('tavern-password-modal').classList.add('hidden');
+            showDashboard();
+        }
+        function copyTavernPassword() {
+            const pwd = document.getElementById('tavern-init-password').value;
+            navigator.clipboard.writeText(pwd).then(() => {
+                alert('密码已复制到剪贴板');
+            });
         }
 
         // ===== 关闭夜鹭机 =====
