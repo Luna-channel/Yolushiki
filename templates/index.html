@@ -475,6 +475,90 @@
             word-break: break-all;
             margin-bottom: 16px;
         }
+
+        /* ===== 自定义弹窗 ===== */
+        .dialog-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+        .dialog-overlay.show { opacity: 1; visibility: visible; }
+        .dialog-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 420px;
+            width: 100%;
+            transform: scale(0.95);
+            transition: transform 0.2s;
+        }
+        .dialog-overlay.show .dialog-box { transform: scale(1); }
+        .dialog-icon {
+            width: 48px; height: 48px;
+            margin: 0 auto 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .dialog-icon.warning { background: rgba(212,160,23,0.15); color: var(--accent-yellow); }
+        .dialog-icon.success { background: rgba(39,174,96,0.15); color: var(--accent-green); }
+        .dialog-icon.error { background: rgba(192,57,43,0.15); color: var(--accent-red); }
+        .dialog-icon.info { background: rgba(74,142,207,0.15); color: var(--accent-blue-light); }
+        .dialog-icon i { width: 24px; height: 24px; }
+        .dialog-title {
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+        .dialog-message {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            white-space: pre-line;
+        }
+        .dialog-btns { display: flex; gap: 10px; }
+        .dialog-btns .btn { flex: 1; padding: 12px; font-size: 0.9rem; }
+
+        /* 关闭界面 */
+        .shutdown-screen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, #0d2137 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+        .shutdown-screen .logo { width: 80px; height: 80px; border-radius: 12px; margin-bottom: 20px; opacity: 0.6; }
+        .shutdown-screen h1 { color: #fff; font-size: 1.8rem; margin-bottom: 12px; }
+        .shutdown-screen p { color: var(--text-secondary); margin-bottom: 24px; }
+        .shutdown-screen .cmd-box {
+            background: #060d18;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            color: var(--accent-green);
+            cursor: pointer;
+            margin-bottom: 24px;
+            transition: background 0.2s;
+        }
+        .shutdown-screen .cmd-box:hover { background: #0a1520; }
+        .shutdown-screen .hint { font-size: 0.8rem; color: var(--text-secondary); }
     </style>
 </head>
 <body>
@@ -671,6 +755,25 @@
                 </div>
             </div>
 
+            <!-- 云酒馆初始密码 -->
+            <div class="card" id="tavern-password-card" style="display:none;">
+                <h2><i data-lucide="key"></i> 云酒馆登录信息</h2>
+                <div style="background:rgba(0,0,0,0.2);padding:14px;border-radius:10px;margin-bottom:10px;">
+                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">用户名</div>
+                    <code style="background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-blue-light);font-size:0.9rem;display:block;margin-bottom:12px;">default-user</code>
+                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">初始密码</div>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <code id="tavern-password-value" style="flex:1;background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;font-family:monospace;">--</code>
+                        <button class="svc-btn" onclick="copyTavernPassword()" style="white-space:nowrap;">
+                            <i data-lucide="copy"></i> 复制
+                        </button>
+                    </div>
+                </div>
+                <div style="font-size:0.75rem;color:var(--text-secondary);">
+                    💡 登录后可在酒馆设置中修改密码
+                </div>
+            </div>
+
             <!-- NapCat Token 信息 -->
             <div class="card" id="napcat-token-card" style="display:none;">
                 <h2><i data-lucide="key"></i> NapCat 登录信息</h2>
@@ -776,34 +879,30 @@
         </div>
     </div>
 
-    <!-- ===== 酒馆初始密码弹窗 ===== -->
-    <div class="modal-overlay hidden" id="tavern-password-modal">
-        <div class="modal">
-            <h2><i data-lucide="key"></i> SillyTavern 初始密码</h2>
-            <div class="modal-success show" style="display:block;">
-                <strong>🎉 安装完成！</strong><br>
-                为了安全，已为您的酒馆设置初始密码。
+    <!-- ===== 自定义弹窗 ===== -->
+    <div class="dialog-overlay" id="dialog-overlay">
+        <div class="dialog-box">
+            <div class="dialog-icon" id="dialog-icon">
+                <i data-lucide="alert-triangle"></i>
             </div>
-            <div class="input-group">
-                <label><i data-lucide="user"></i> 用户名</label>
-                <input type="text" value="default-user" readonly style="background:#0a1628;cursor:text;">
-            </div>
-            <div class="input-group">
-                <label><i data-lucide="lock"></i> 初始密码（请妥善保存）</label>
-                <div style="display:flex;gap:8px;">
-                    <input type="text" id="tavern-init-password" readonly style="background:#0a1628;cursor:text;font-family:monospace;">
-                    <button class="btn btn-secondary" onclick="copyTavernPassword()" style="flex:none;padding:10px 16px;">
-                        <i data-lucide="copy" style="width:16px;height:16px;"></i>
-                    </button>
-                </div>
-            </div>
-            <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">
-                💡 登录后可在酒馆设置中修改密码
-            </p>
-            <div class="modal-btns">
-                <button class="btn btn-primary" onclick="closeTavernPasswordModal()">我已记住，进入管理面板</button>
-            </div>
+            <div class="dialog-title" id="dialog-title">提示</div>
+            <div class="dialog-message" id="dialog-message"></div>
+            <div class="dialog-btns" id="dialog-btns"></div>
         </div>
+    </div>
+
+    <!-- ===== 关闭界面 ===== -->
+    <div class="shutdown-screen" id="shutdown-screen" style="display:none;">
+        <img src="/static/logo.png" alt="夜鹭机" class="logo">
+        <h1>夜鹭机已关闭</h1>
+        <p>云酒馆、AstrBot、NapCat 仍在运行</p>
+        <div class="cmd-box" onclick="copyRestartCmd()">
+            <span id="restart-cmd">bash /opt/yolushiki/install.sh</span>
+        </div>
+        <p class="hint">点击上方命令复制，在终端执行即可重启管理面板</p>
+        <button class="btn btn-primary" style="margin-top:16px;width:auto;padding:12px 32px;" onclick="tryRestart()">
+            <i data-lucide="refresh-cw"></i> 尝试重启
+        </button>
     </div>
 
     <script>
@@ -811,6 +910,79 @@
         const CONFIG = {{ config | tojson }};
         let statusInterval = null;
         let installInterval = null;
+        let dialogResolve = null;
+
+        // ===== 自定义弹窗函数 =====
+        function showDialog(options) {
+            return new Promise(resolve => {
+                dialogResolve = resolve;
+                const overlay = document.getElementById('dialog-overlay');
+                const iconEl = document.getElementById('dialog-icon');
+                const titleEl = document.getElementById('dialog-title');
+                const msgEl = document.getElementById('dialog-message');
+                const btnsEl = document.getElementById('dialog-btns');
+
+                const iconMap = {
+                    warning: 'alert-triangle',
+                    success: 'check-circle',
+                    error: 'x-circle',
+                    info: 'info'
+                };
+                const type = options.type || 'info';
+                iconEl.className = 'dialog-icon ' + type;
+                iconEl.innerHTML = '<i data-lucide="' + iconMap[type] + '"></i>';
+                titleEl.textContent = options.title || '提示';
+                msgEl.textContent = options.message || '';
+
+                btnsEl.innerHTML = '';
+                if (options.showCancel) {
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.className = 'btn btn-secondary';
+                    cancelBtn.textContent = options.cancelText || '取消';
+                    cancelBtn.onclick = () => closeDialog(false);
+                    btnsEl.appendChild(cancelBtn);
+                }
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = 'btn btn-primary';
+                confirmBtn.textContent = options.confirmText || '确定';
+                confirmBtn.onclick = () => closeDialog(true);
+                btnsEl.appendChild(confirmBtn);
+
+                overlay.classList.add('show');
+                lucide.createIcons();
+            });
+        }
+
+        function closeDialog(result) {
+            document.getElementById('dialog-overlay').classList.remove('show');
+            if (dialogResolve) {
+                dialogResolve(result);
+                dialogResolve = null;
+            }
+        }
+
+        // 替代 alert
+        function showAlert(message, type = 'info', title = '提示') {
+            return showDialog({ type, title, message, showCancel: false });
+        }
+
+        // 替代 confirm
+        function showConfirm(message, title = '确认', type = 'warning') {
+            return showDialog({ type, title, message, showCancel: true, confirmText: '确定', cancelText: '取消' });
+        }
+
+        // 关闭界面相关
+        function copyRestartCmd() {
+            const cmd = document.getElementById('restart-cmd').textContent;
+            navigator.clipboard.writeText(cmd);
+            const box = document.querySelector('.shutdown-screen .cmd-box');
+            box.style.background = '#1a3d1a';
+            setTimeout(() => box.style.background = '', 1000);
+        }
+
+        function tryRestart() {
+            window.location.reload();
+        }
 
         // ===== 初始化 =====
         document.addEventListener('DOMContentLoaded', async () => {
@@ -872,12 +1044,13 @@
             refreshStatus();
             refreshSystemInfo();
             fetchNapCatToken();
+            fetchTavernPassword();
             if (statusInterval) clearInterval(statusInterval);
             statusInterval = setInterval(refreshStatus, 8000);
         }
 
         // ===== 安装向导 =====
-        function startInstall() {
+        async function startInstall() {
             const installTavern = document.getElementById('install-tavern').checked;
             const installAstrbot = document.getElementById('install-astrbot').checked;
             const tavernPort = parseInt(document.getElementById('tavern-port').value);
@@ -889,11 +1062,11 @@
             });
             
             if (!installTavern && !installAstrbot) {
-                alert('请至少选择一项安装内容');
+                await showAlert('请至少选择一项安装内容', 'warning', '提示');
                 return;
             }
             if (installTavern && (tavernPort < 1024 || tavernPort > 65535)) {
-                alert('端口必须在 1024-65535 之间');
+                await showAlert('端口必须在 1024-65535 之间', 'warning', '提示');
                 return;
             }
             showSection('progress-section');
@@ -912,8 +1085,8 @@
             installInterval = setInterval(checkInstallStatus, 1000);
         }
 
-        let lastProgress = 0;
-        let stuckCount = 0;
+        let lastLogLength = 0;
+        let noLogUpdateCount = 0;
         
         function checkInstallStatus() {
             fetch('/api/status')
@@ -928,27 +1101,24 @@
                     logBox.innerHTML = logs.map(l => '<div class="log-line">' + l + '</div>').join('');
                     logBox.scrollTop = logBox.scrollHeight;
                     
-                    // 超时检测：进度卡住超过60秒显示提示
-                    if (data.progress === lastProgress && data.progress > 0 && data.progress < 100) {
-                        stuckCount++;
-                        if (stuckCount > 60) {  // 60秒没动
+                    // 超时检测：日志60秒无更新才显示提示
+                    const currentLogLength = logs.join('').length;
+                    if (currentLogLength === lastLogLength && progress > 0 && progress < 100) {
+                        noLogUpdateCount++;
+                        if (noLogUpdateCount >= 60) {  // 60秒日志无变化
                             document.getElementById('timeout-panel').classList.remove('hidden');
                         }
                     } else {
-                        stuckCount = 0;
-                        lastProgress = data.progress;
+                        noLogUpdateCount = 0;
+                        lastLogLength = currentLogLength;
+                        document.getElementById('timeout-panel').classList.add('hidden');
                     }
                     
                     if (data.stage === 'completed') {
                         clearInterval(installInterval);
                         document.getElementById('timeout-panel').classList.add('hidden');
                         document.getElementById('error-panel').classList.add('hidden');
-                        // 显示酒馆初始密码
-                        if (data.results && data.results.tavern_password) {
-                            showTavernPasswordModal(data.results.tavern_password);
-                        } else {
-                            setTimeout(() => showDashboard(), 1500);
-                        }
+                        setTimeout(() => showDashboard(), 1500);
                     } else if (data.stage === 'error') {
                         clearInterval(installInterval);
                         document.getElementById('timeout-panel').classList.add('hidden');
@@ -973,8 +1143,8 @@
         function retryInstall() {
             document.getElementById('error-panel').classList.add('hidden');
             document.getElementById('timeout-panel').classList.add('hidden');
-            lastProgress = 0;
-            stuckCount = 0;
+            lastLogLength = 0;
+            noLogUpdateCount = 0;
             startInstall();
         }
         
@@ -991,15 +1161,15 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert('镜像配置成功，请点击"重试安装"');
+                    await showAlert('镜像配置成功，请点击"重试安装"', 'success', '配置成功');
                     document.getElementById('timeout-panel').classList.add('hidden');
                     document.getElementById('error-panel').classList.remove('hidden');
                     document.getElementById('error-message').textContent = '已配置镜像加速，请重试';
                 } else {
-                    alert('配置失败: ' + (data.error || '未知错误'));
+                    await showAlert('配置失败: ' + (data.error || '未知错误'), 'error', '错误');
                 }
             } catch(e) {
-                alert('网络错误');
+                await showAlert('网络错误', 'error', '错误');
             }
             btn.disabled = false;
             btn.textContent = originalText;
@@ -1121,6 +1291,28 @@
             }
         }
 
+        async function fetchTavernPassword() {
+            try {
+                const res = await fetch('/api/system/info');
+                const data = await res.json();
+                const card = document.getElementById('tavern-password-card');
+                const valueEl = document.getElementById('tavern-password-value');
+                if (data.tavern_password) {
+                    card.style.display = 'block';
+                    valueEl.textContent = data.tavern_password;
+                }
+            } catch(e) { console.error('获取酒馆密码失败', e); }
+        }
+
+        function copyTavernPassword() {
+            const pwd = document.getElementById('tavern-password-value')?.textContent;
+            if (pwd && pwd !== '--' && navigator.clipboard) {
+                navigator.clipboard.writeText(pwd);
+                const btn = event.target.closest('.svc-btn');
+                if (btn) { const orig = btn.innerHTML; btn.innerHTML = '<i data-lucide="check"></i> 已复制'; lucide.createIcons(); setTimeout(() => { btn.innerHTML = orig; lucide.createIcons(); }, 1500); }
+            }
+        }
+
         async function restartService(name) {
             const btn = event.target.closest('.svc-btn');
             if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
@@ -1132,7 +1324,7 @@
             try {
                 await fetch('/api/services/' + name + '/restart', { method: 'POST' });
                 setTimeout(refreshStatus, 3000);
-            } catch(e) { alert('操作失败'); }
+            } catch(e) { showAlert('操作失败', 'error', '错误'); }
             setTimeout(() => {
                 if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
             }, 3000);
@@ -1195,31 +1387,16 @@
             document.getElementById('logs-modal').classList.add('hidden');
         }
 
-        // ===== 酒馆初始密码弹窗 =====
-        function showTavernPasswordModal(password) {
-            document.getElementById('tavern-init-password').value = password;
-            document.getElementById('tavern-password-modal').classList.remove('hidden');
-            lucide.createIcons();
-        }
-        function closeTavernPasswordModal() {
-            document.getElementById('tavern-password-modal').classList.add('hidden');
-            showDashboard();
-        }
-        function copyTavernPassword() {
-            const pwd = document.getElementById('tavern-init-password').value;
-            navigator.clipboard.writeText(pwd).then(() => {
-                alert('密码已复制到剪贴板');
-            });
-        }
-
         // ===== 关闭夜鹭机 =====
-        function confirmShutdown() {
-            const cmd = 'bash /opt/yolushiki/install.sh';
-            const confirmed = confirm(
-                '⚠️ 你确定要关闭夜鹭机吗？\n\n' +
-                '关闭后，如需再次打开此界面，请在终端执行：\n\n' +
-                cmd
-            );
+        async function confirmShutdown() {
+            const confirmed = await showDialog({
+                type: 'warning',
+                title: '关闭夜鹭机管理面板？',
+                message: '云酒馆、AstrBot、NapCat 不会受影响，会继续运行。\n仅关闭此管理界面。\n\n建议保持管理面板运行，方便随时查看状态。',
+                showCancel: true,
+                confirmText: '确认关闭',
+                cancelText: '取消'
+            });
             if (confirmed) {
                 doShutdown();
             }
@@ -1227,22 +1404,9 @@
 
         async function doShutdown() {
             await fetch('/api/auth/logout', { method: 'POST' });
-            // 显示可复制的命令提示
-            document.body.innerHTML = `
-                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#1a1a2e;color:#fff;font-family:system-ui;">
-                    <h1 style="margin-bottom:20px;">夜鹭机已关闭</h1>
-                    <p style="margin-bottom:15px;color:#aaa;">如需重新打开，请在终端执行以下命令：</p>
-                    <code id="restart-cmd" style="background:#2d2d44;padding:15px 25px;border-radius:8px;cursor:pointer;font-size:16px;" onclick="copyCmd()">bash /opt/yolushiki/install.sh</code>
-                    <p style="margin-top:10px;color:#888;font-size:12px;">点击上方命令即可复制</p>
-                </div>
-                <script>
-                    function copyCmd() {
-                        navigator.clipboard.writeText('bash /opt/yolushiki/install.sh');
-                        document.getElementById('restart-cmd').style.background = '#3d5a3d';
-                        setTimeout(() => document.getElementById('restart-cmd').style.background = '#2d2d44', 1000);
-                    }
-                </script>
-            `;
+            // 显示关闭界面
+            document.getElementById('shutdown-screen').style.display = 'flex';
+            lucide.createIcons();
         }
     </script>
 </body>

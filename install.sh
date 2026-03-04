@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # ============================================================
 # 夜鹭机 一键部署脚本
 # 
@@ -287,8 +287,9 @@ def log(message):
     install_status["logs"].append(log_entry)
     print(log_entry)
 
-def run_command(cmd, cwd=None, stream=False):
-    log(f"执行: {cmd}")
+def run_command(cmd, cwd=None, stream=False, quiet=False):
+    if not quiet:
+        log(f"执行: {cmd}")
     try:
         if stream:
             # 实时输出模式（用于docker pull等）
@@ -320,7 +321,7 @@ def run_command(cmd, cwd=None, stream=False):
         else:
             result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=600)
             output = result.stdout + result.stderr
-            if result.returncode != 0:
+            if result.returncode != 0 and not quiet:
                 log(f"命令失败: {output[-500:] if len(output) > 500 else output}")
             return result.returncode == 0, output
     except subprocess.TimeoutExpired:
@@ -332,11 +333,11 @@ def run_command(cmd, cwd=None, stream=False):
 
 def install_docker():
     log("检查Docker...")
-    success, _ = run_command("docker --version")
+    success, output = run_command("docker --version", quiet=True)
     if success:
-        log("Docker已安装")
+        log(f"Docker已安装: {output.strip()}")
         return True
-    log("安装Docker（阿里云镜像）...")
+    log("Docker未安装，开始安装...")
     success, _ = run_command("curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun")
     if success:
         run_command("systemctl start docker")
@@ -345,7 +346,7 @@ def install_docker():
 
 def install_nodejs():
     log("检查Node.js...")
-    success, output = run_command("node --version")
+    success, output = run_command("node --version", quiet=True)
     if success and "v" in output:
         version = int(output.strip().split(".")[0].replace("v", ""))
         if version >= 18:
@@ -358,11 +359,11 @@ def install_nodejs():
 
 def install_pm2():
     log("检查PM2...")
-    success, _ = run_command("pm2 --version")
+    success, output = run_command("pm2 --version", quiet=True)
     if success:
-        log("PM2已安装")
+        log(f"PM2已安装: {output.strip()}")
         return True
-    log("安装PM2...")
+    log("PM2未安装，开始安装...")
     success, _ = run_command("npm install -g pm2 --registry=https://registry.npmmirror.com")
     return success
 
@@ -392,7 +393,7 @@ def deploy_astrbot():
   astrbot:
     environment:
       - TZ=Asia/Shanghai
-    image: soulter/astrbot:latest
+    image: m.daocloud.io/docker.io/soulter/astrbot:latest
     container_name: astrbot
     restart: always
     ports:
@@ -409,11 +410,14 @@ networks:
         f.write(yml_content)
     log("astrbot.yml 已生成")
     
-    log("拉取Docker镜像（首次约需3-5分钟）...")
-    log("拉取 napcat 镜像...")
-    run_command("docker pull mlikiowa/napcat-docker:latest", cwd=astrbot_dir, stream=True)
-    log("拉取 astrbot 镜像...")
-    run_command("docker pull soulter/astrbot:latest", cwd=astrbot_dir, stream=True)
+    log("拉取Docker镜像（实时进度）...")
+    install_status["message"] = "拉取 Docker 镜像中..."
+    run_command("docker compose -f astrbot.yml pull", cwd=astrbot_dir, stream=True)
+    if not os.path.exists(f"{astrbot_dir}/astrbot.yml"):
+        log("拉取 napcat 镜像...")
+        run_command("docker pull mlikiowa/napcat-docker:latest", cwd=astrbot_dir, stream=True)
+        log("拉取 astrbot 镜像...")
+        run_command("docker pull m.daocloud.io/docker.io/soulter/astrbot:latest", cwd=astrbot_dir, stream=True)
     
     log("启动Docker容器...")
     success, _ = run_command("docker compose -f astrbot.yml up -d", cwd=astrbot_dir)
@@ -426,15 +430,16 @@ def deploy_sillytavern():
     tavern_dir = "/opt/sillytavern"
     if not os.path.exists(tavern_dir):
         log("克隆SillyTavern...")
-        success, _ = run_command(f"git clone https://gh.llkk.cc/https://github.com/SillyTavern/SillyTavern.git {tavern_dir}")
+        install_status["message"] = "克隆 SillyTavern 仓库..."
+        success, _ = run_command(f"git clone --depth 1 --progress https://gh.llkk.cc/https://github.com/SillyTavern/SillyTavern.git {tavern_dir}", stream=True)
         if not success:
-            # 原始地址兜底
-            success, _ = run_command(f"git clone https://github.com/SillyTavern/SillyTavern.git {tavern_dir}")
+            success, _ = run_command(f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}", stream=True)
         if not success:
             return False
     log("安装npm依赖...")
     # 使用淘宝镜像加速 npm
-    npm_cmd = "npm install --no-audit --no-fund --loglevel=error --registry=https://registry.npmmirror.com"
+    npm_cmd = "npm install --no-audit --no-fund --registry=https://registry.npmmirror.com"
+    install_status["message"] = "安装 npm 依赖..."
     install_success = False
     for attempt in range(3):
         if attempt > 0:

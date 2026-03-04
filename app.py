@@ -151,7 +151,8 @@ def run_command(cmd, cwd=None, quiet=False):
 
 
 def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
-    """执行命令并实时输出日志（用于 Docker pull 等长时间操作）
+    """执行命令并实时输出日志（用于 Docker pull / git clone / npm install 等）
+    每一行输出都立即写入 install_status["logs"]，前端轮询即可实时看到。
     generation: 传入当前安装代数，如果被新安装覆盖则中止
     """
     log(f"执行: {cmd}")
@@ -162,7 +163,6 @@ def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
             text=True, bufsize=1
         )
         output_lines = []
-        last_log_time = time.time()
         for line in process.stdout:
             # 检查是否被新安装覆盖，是则杀掉子进程退出
             if generation is not None and generation != install_generation:
@@ -171,11 +171,8 @@ def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
             line = line.strip()
             if line:
                 output_lines.append(line)
-                # 每2秒或遇到重要信息时输出日志
-                now = time.time()
-                if now - last_log_time > 2 or "Pulling" in line or "Downloaded" in line or "Pull complete" in line:
-                    log(line[:100])  # 截断过长的行
-                    last_log_time = now
+                # 每行都立即写入日志，前端即刻可见
+                log(line[:120])
         process.wait(timeout=timeout)
         if process.returncode != 0:
             log(f"命令返回码: {process.returncode}")
@@ -324,6 +321,8 @@ def get_system_info():
     # 运行时间
     ok, out = run_command("cat /proc/uptime", quiet=True)
     info["uptime_seconds"] = int(float(out.split()[0])) if ok else 0
+    # 酒馆初始密码
+    info["tavern_password"] = config.get("tavern_password", "")
     return info
 
 
@@ -359,11 +358,11 @@ def get_napcat_token():
 def install_docker():
     """安装Docker"""
     log("检查Docker...")
-    success, _ = run_command("docker --version")
+    success, output = run_command("docker --version", quiet=True)
     if success:
-        log("Docker已安装")
+        log(f"Docker已安装: {output.strip()}")
         return True
-    log("安装Docker...")
+    log("Docker未安装，开始安装...")
     success, _ = run_command("curl -fsSL https://get.docker.com | bash")
     if not success:
         return False
@@ -408,7 +407,7 @@ def configure_docker_mirrors():
 def install_nodejs():
     """安装Node.js"""
     log("检查Node.js...")
-    success, output = run_command("node --version")
+    success, output = run_command("node --version", quiet=True)
     if success and "v" in output:
         version = int(output.strip().split(".")[0].replace("v", ""))
         if version >= 18:
@@ -423,11 +422,11 @@ def install_nodejs():
 def install_pm2():
     """安装PM2"""
     log("检查PM2...")
-    success, _ = run_command("pm2 --version")
+    success, output = run_command("pm2 --version", quiet=True)
     if success:
-        log("PM2已安装")
+        log(f"PM2已安装: {output.strip()}")
         return True
-    log("安装PM2...")
+    log("PM2未安装，开始安装...")
     success, _ = run_command("npm install -g pm2 --registry=https://registry.npmmirror.com")
     return success
 
@@ -437,37 +436,62 @@ def deploy_astrbot():
     log("部署AstrBot + NapCat...")
     astrbot_dir = "/opt/astrbot"
     run_command(f"mkdir -p {astrbot_dir}")
-    # 优先使用镜像（大陆服务器 GitHub Raw 超时）
-    yml_mirror = "https://gh.llkk.cc/https://raw.githubusercontent.com/NapNeko/NapCat-Docker/main/compose/astrbot.yml"
-    yml_direct = "https://raw.githubusercontent.com/NapNeko/NapCat-Docker/main/compose/astrbot.yml"
-    success, _ = run_command(f"wget -O astrbot.yml {yml_mirror}", cwd=astrbot_dir)
-    if not success:
-        success, _ = run_command(f"curl -o astrbot.yml {yml_mirror}", cwd=astrbot_dir)
-    if not success:
-        # 镜像失败，尝试直连
-        success, _ = run_command(f"wget -O astrbot.yml {yml_direct}", cwd=astrbot_dir)
-    if not success:
-        success, _ = run_command(f"curl -o astrbot.yml {yml_direct}", cwd=astrbot_dir)
-    if not success:
-        log("下载astrbot.yml失败")
-        return False
-    # 先拉取镜像
-    log("拉取Docker镜像...")
-    # 使用普通命令拉取，避免 stream 模式的 IO 开销
-    pull_ok, output = run_command("docker compose -f astrbot.yml pull --quiet", cwd=astrbot_dir)
+    # 直接内嵌 yml（使用镜像加速地址，避免从 GitHub 下载）
+    yml_content = '''services:
+  napcat:
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID:-1000}
+      - NAPCAT_GID=${NAPCAT_GID:-1000}
+      - MODE=astrbot
+    ports:
+      - 6099:6099
+    container_name: napcat
+    restart: always
+    image: mlikiowa/napcat-docker:latest
+    volumes:
+      - ./data:/AstrBot/data
+      - ./napcat/config:/app/napcat/config
+      - ./ntqq:/app/.config/QQ
+    networks:
+      - astrbot_network
+  astrbot:
+    environment:
+      - TZ=Asia/Shanghai
+    image: m.daocloud.io/docker.io/soulter/astrbot:latest
+    container_name: astrbot
+    restart: always
+    ports:
+      - "6185:6185"
+    volumes:
+      - ./data:/AstrBot/data
+    networks:
+      - astrbot_network
+networks:
+  astrbot_network:
+    driver: bridge
+'''
+    with open(f"{astrbot_dir}/astrbot.yml", "w") as f:
+        f.write(yml_content)
+    log("astrbot.yml 已生成（含镜像加速）")
+    # 拉取镜像：直接用流式模式，实时显示进度
+    log("拉取Docker镜像（实时进度）...")
+    install_status["message"] = "拉取 Docker 镜像中..."
+    pull_ok, _ = run_command_stream(
+        "docker compose -f astrbot.yml pull",
+        cwd=astrbot_dir, generation=install_generation
+    )
     if not pull_ok:
-        pull_ok, output = run_command("docker-compose -f astrbot.yml pull --quiet", cwd=astrbot_dir)
-    if not pull_ok:
-        # 静默模式失败，用详细模式重试看具体错误
-        log("静默拉取失败，尝试详细模式...")
-        pull_ok, _ = run_command_stream("docker compose -f astrbot.yml pull", cwd=astrbot_dir, generation=install_generation)
-        if not pull_ok:
-            pull_ok, _ = run_command_stream("docker-compose -f astrbot.yml pull", cwd=astrbot_dir, generation=install_generation)
+        pull_ok, _ = run_command_stream(
+            "docker-compose -f astrbot.yml pull",
+            cwd=astrbot_dir, generation=install_generation
+        )
     if not pull_ok:
         log("Docker镜像拉取失败，请检查网络或更换Docker镜像源")
         return False
-    # 启动容器
+# 启动容器
+
     log("启动Docker容器...")
+    install_status["message"] = "启动 Docker 容器..."
     success, _ = run_command("docker compose -f astrbot.yml up -d", cwd=astrbot_dir)
     if not success:
         success, _ = run_command("docker-compose -f astrbot.yml up -d", cwd=astrbot_dir)
@@ -485,26 +509,30 @@ def deploy_sillytavern():
         run_command(f"rm -rf {tavern_dir}")
     if not os.path.exists(tavern_dir):
         log("克隆 SillyTavern 仓库...")
-        success, _ = run_command(
-            f"git clone --depth 1 https://gh.llkk.cc/https://github.com/SillyTavern/SillyTavern.git {tavern_dir}"
+        install_status["message"] = "克隆 SillyTavern 仓库..."
+        success, _ = run_command_stream(
+            f"git clone --depth 1 --progress https://gh.llkk.cc/https://github.com/SillyTavern/SillyTavern.git {tavern_dir}",
+            generation=install_generation
         )
         if not success:
-            success, _ = run_command(
-                f"git clone --depth 1 https://github.com/SillyTavern/SillyTavern.git {tavern_dir}"
+            success, _ = run_command_stream(
+                f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}",
+                generation=install_generation
             )
         if not success:
             log("SillyTavern 仓库克隆失败")
             return False
     log("安装npm依赖...")
+    install_status["message"] = "安装 npm 依赖（可能需要几分钟）..."
     install_success = False
-    # 使用淘宝镜像加速 npm，大陆服务器更快
-    npm_cmd = "npm install --no-audit --no-fund --loglevel=error --registry=https://registry.npmmirror.com"
+    # 使用淘宝镜像加速，用 --progress 显示进度
+    npm_cmd = "npm install --no-audit --no-fund --registry=https://registry.npmmirror.com"
     for attempt in range(3):
         if attempt > 0:
             log(f"npm install 重试第 {attempt} 次...")
             run_command("rm -rf node_modules", cwd=tavern_dir)
             run_command("npm cache clean --force", cwd=tavern_dir)
-        success, _ = run_command(npm_cmd, cwd=tavern_dir)
+        success, _ = run_command_stream(npm_cmd, cwd=tavern_dir, generation=install_generation)
         if success:
             install_success = True
             break
@@ -666,64 +694,116 @@ def configure_firewall():
 
 
 def do_install(generation):
-    """执行安装。generation 用于检测是否被新的安装请求覆盖。"""
+    """执行安装。
+    流程：1.检查依赖 → 2.安装缺失依赖 → 3.按顺序部署服务（流式进度）
+    generation 用于检测是否被新的安装请求覆盖。
+    """
     global install_status
 
     def cancelled():
         return generation != install_generation
 
+    need_docker = config.get("install_astrbot", True)
+    need_tavern = config.get("install_tavern", True)
+
     try:
         install_status["stage"] = "installing"
 
+        # ========== 阶段1：检查依赖 ==========
+        install_status["progress"] = 2
+        install_status["message"] = "检查服务器依赖..."
+        log("===== 阶段1：检查依赖 =====")
+
+        has_docker = False
+        has_nodejs = False
+        has_pm2 = False
+
+        ok, out = run_command("docker --version", quiet=True)
+        if ok:
+            log(f"Docker 已安装: {out.strip()}")
+            has_docker = True
+        else:
+            log("Docker 未安装")
+
+        ok, out = run_command("node --version", quiet=True)
+        if ok and "v" in out:
+            ver = int(out.strip().split(".")[0].replace("v", ""))
+            if ver >= 18:
+                log(f"Node.js 已安装: {out.strip()}")
+                has_nodejs = True
+            else:
+                log(f"Node.js 版本过低: {out.strip()}，需要 v18+")
+        else:
+            log("Node.js 未安装")
+
+        ok, out = run_command("pm2 --version", quiet=True)
+        if ok:
+            log(f"PM2 已安装: {out.strip()}")
+            has_pm2 = True
+        else:
+            log("PM2 未安装")
+
+        # ========== 阶段2：安装缺失依赖 ==========
         install_status["progress"] = 5
-        install_status["message"] = "更新系统..."
-        log("更新系统包...")
-        run_command("apt-get update")
+        install_status["message"] = "安装缺失依赖..."
+        log("===== 阶段2：安装缺失依赖 =====")
+
+        missing = []
+        if need_docker and not has_docker:
+            missing.append("Docker")
+        if need_tavern and not has_nodejs:
+            missing.append("Node.js")
+        if need_tavern and not has_pm2:
+            missing.append("PM2")
+
+        if missing:
+            log(f"需要安装: {', '.join(missing)}")
+            install_status["message"] = "更新系统包..."
+            run_command("apt-get update -qq")
+        else:
+            log("所有依赖已就绪，跳过安装")
 
         if cancelled(): return
-        install_status["progress"] = 15
-        install_status["message"] = "安装Docker..."
-        if not install_docker():
-            raise Exception("Docker安装失败")
+
+        if need_docker and not has_docker:
+            install_status["progress"] = 8
+            install_status["message"] = "安装 Docker..."
+            if not install_docker():
+                raise Exception("Docker安装失败")
 
         if cancelled(): return
-        install_status["progress"] = 30
-        install_status["message"] = "安装Node.js..."
-        if not install_nodejs():
-            raise Exception("Node.js安装失败")
+
+        if need_tavern and not has_nodejs:
+            install_status["progress"] = 15
+            install_status["message"] = "安装 Node.js..."
+            if not install_nodejs():
+                raise Exception("Node.js安装失败")
 
         if cancelled(): return
-        install_status["progress"] = 40
-        install_status["message"] = "安装PM2..."
-        if not install_pm2():
-            raise Exception("PM2安装失败")
+
+        if need_tavern and not has_pm2:
+            install_status["progress"] = 20
+            install_status["message"] = "安装 PM2..."
+            if not install_pm2():
+                raise Exception("PM2安装失败")
 
         if cancelled(): return
+
+        # ========== 阶段3：按顺序部署服务 ==========
+        log("===== 阶段3：部署服务 =====")
         napcat_token = ""
-        if config.get("install_astrbot", True):
-            # 先验证 Docker Hub 连通性，不通就直接报错让用户换源
-            install_status["progress"] = 45
-            install_status["message"] = "检测 Docker Hub 连通性..."
-            log("检测 Docker Hub 连通性...")
-            docker_ok, _ = run_command(
-                "timeout 10 curl -s --connect-timeout 5 https://registry-1.docker.io/v2/ || "
-                "timeout 10 curl -s --connect-timeout 5 https://hub.docker.com/",
-                quiet=True
-            )
-            if not docker_ok:
-                log("Docker Hub 连接失败，请先配置 Docker 镜像加速或检查 DNS")
-                raise Exception("Docker Hub 连接失败，请换源后重试")
 
-            install_status["progress"] = 50
-            install_status["message"] = "部署AstrBot + NapCat..."
+        if need_docker:
+            install_status["progress"] = 25
+            install_status["message"] = "部署 AstrBot + NapCat..."
             if not deploy_astrbot():
                 raise Exception("AstrBot部署失败")
 
             # 等待 NapCat 容器初始化完成后获取 token
-            install_status["progress"] = 65
-            install_status["message"] = "获取NapCat登录Token..."
+            install_status["progress"] = 55
+            install_status["message"] = "获取 NapCat 登录 Token..."
             log("等待NapCat容器初始化...")
-            for _ in range(10):  # 最多等30秒
+            for _ in range(10):
                 time.sleep(3)
                 napcat_token = get_napcat_token()
                 if napcat_token:
@@ -734,42 +814,37 @@ def do_install(generation):
             config["napcat_token"] = napcat_token
 
             if config.get("install_plugins", False):
-                install_status["progress"] = 70
-                install_status["message"] = "安装插件..."
+                install_status["progress"] = 60
+                install_status["message"] = "安装 AstrBot 插件..."
                 install_astrbot_plugins(ASTRBOT_PLUGINS)
         else:
             log("跳过 AstrBot 安装")
 
         if cancelled(): return
-        if config.get("install_tavern", True):
-            install_status["progress"] = 80
-            install_status["message"] = "部署SillyTavern..."
+
+        if need_tavern:
+            install_status["progress"] = 65
+            install_status["message"] = "部署 SillyTavern..."
             if not deploy_sillytavern():
                 raise Exception("SillyTavern部署失败")
         else:
             log("跳过 SillyTavern 安装")
 
         if cancelled(): return
-        install_status["progress"] = 95
+
+        install_status["progress"] = 92
         install_status["message"] = "配置防火墙..."
         configure_firewall()
 
-        install_status["progress"] = 100
-        install_status["message"] = "安装完成！"
-        install_status["stage"] = "completed"
+        # ========== 阶段4：收尾 ==========
+        install_status["progress"] = 95
+        install_status["message"] = "保存配置..."
 
-        # 获取服务器IP并持久化（多种方法备用）
+        # 获取服务器 IP：优先用本地命令，避免外部网络请求卡住
         server_ip = ""
-        for ip_cmd in [
-            "curl -s --connect-timeout 3 ifconfig.me",
-            "curl -s --connect-timeout 3 ip.sb",
-            "curl -s --connect-timeout 3 ipinfo.io/ip",
-            "hostname -I | awk '{print $1}'"
-        ]:
-            ok, ip_out = run_command(ip_cmd, quiet=True)
-            if ok and ip_out.strip() and ip_out.strip() != "--":
-                server_ip = ip_out.strip()
-                break
+        ok, ip_out = run_command("hostname -I | awk '{print $1}'", quiet=True)
+        if ok and ip_out.strip():
+            server_ip = ip_out.strip()
         if not server_ip:
             server_ip = "你的服务器IP"
         config["server_ip"] = server_ip
@@ -791,6 +866,8 @@ def do_install(generation):
         }
 
         # 将夜鹭机管理面板自身注册为 PM2 常驻服务
+        install_status["progress"] = 98
+        install_status["message"] = "注册常驻服务..."
         log("注册夜鹭机管理面板为常驻服务...")
         run_command("pm2 delete yolushiki 2>/dev/null || true", quiet=True)
         yolushiki_app = os.path.join(CONFIG_DIR, "app.py")
@@ -801,6 +878,9 @@ def do_install(generation):
             )
             run_command("pm2 save", quiet=True)
 
+        install_status["progress"] = 100
+        install_status["message"] = "安装完成！"
+        install_status["stage"] = "completed"
         log("夜鹭机安装完成！")
 
     except Exception as e:
