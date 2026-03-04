@@ -559,6 +559,86 @@
         }
         .shutdown-screen .cmd-box:hover { background: #0a1520; }
         .shutdown-screen .hint { font-size: 0.8rem; color: var(--text-secondary); }
+
+        /* ===== 公告弹窗 ===== */
+        .announcement-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 4000;
+            padding: 20px;
+        }
+        .announcement-box {
+            background: var(--bg-secondary);
+            border: 2px solid var(--accent-blue);
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+        }
+        .announcement-box .title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent-yellow);
+            margin-bottom: 16px;
+        }
+        .announcement-box .content {
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            line-height: 1.8;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .announcement-box .countdown {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+        }
+        .announcement-box .close-btn {
+            padding: 10px 28px;
+            background: var(--accent-blue);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .announcement-box .close-btn:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+        .announcement-box .close-btn:not(:disabled):hover {
+            background: var(--accent-blue-light);
+        }
+
+        /* ===== 底部栏 ===== */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+        .footer a {
+            color: var(--accent-blue-light);
+            text-decoration: none;
+        }
+        .footer a:hover { text-decoration: underline; }
+
+        /* 小喇叭按钮 */
+        .topbar-btn-announce {
+            color: var(--accent-yellow);
+        }
+        .topbar-btn-announce:hover {
+            background: rgba(212,160,23,0.15);
+            color: var(--accent-yellow);
+        }
     </style>
 </head>
 <body>
@@ -569,6 +649,9 @@
             <span>夜鹭机</span>
         </div>
         <div class="topbar-actions">
+            <button class="topbar-btn topbar-btn-announce" onclick="showAnnouncement()" title="公告">
+                <i data-lucide="megaphone"></i>
+            </button>
             <button class="topbar-btn topbar-btn-danger" onclick="confirmShutdown()">
                 <i data-lucide="power"></i>
             </button>
@@ -614,10 +697,10 @@
                     <input type="checkbox" id="install-tavern" checked>
                     <label for="install-tavern">安装 SillyTavern</label>
                 </div>
-                <div class="checkbox-group" id="tavern-mode-group" style="margin-left: 24px;">
-                    <input type="checkbox" id="enable-multiuser" checked>
-                    <label for="enable-multiuser">启用多用户模式（推荐）</label>
-                </div>
+                <p class="hint" id="tavern-hint" style="margin-left: 24px; margin-top: 8px; font-size: 0.85rem; color: var(--accent-yellow);">
+                    <i data-lucide="alert-circle" style="width:14px;height:14px;display:inline;vertical-align:middle;"></i>
+                    安装完成后请务必在酒馆设置中启用多用户模式并设置管理员密码！
+                </p>
             </div>
 
             <div class="card">
@@ -700,6 +783,29 @@
 
         <!-- ========== 仪表盘 ========== -->
         <div id="dashboard-section" class="section">
+            <!-- 系统信息（移到顶部） -->
+            <div class="card" style="margin-bottom:20px;">
+                <h2><i data-lucide="server"></i> 系统信息</h2>
+                <div class="sys-grid">
+                    <div class="sys-item">
+                        <div class="sys-label"><i data-lucide="globe"></i> 服务器 IP</div>
+                        <div class="sys-value" id="sys-ip">--</div>
+                    </div>
+                    <div class="sys-item">
+                        <div class="sys-label"><i data-lucide="clock"></i> 运行时间</div>
+                        <div class="sys-value" id="sys-uptime">--</div>
+                    </div>
+                    <div class="sys-item">
+                        <div class="sys-label"><i data-lucide="cpu"></i> 内存使用</div>
+                        <div class="sys-value" id="sys-mem">--</div>
+                    </div>
+                    <div class="sys-item">
+                        <div class="sys-label"><i data-lucide="hard-drive"></i> 磁盘使用</div>
+                        <div class="sys-value" id="sys-disk">--</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 服务卡片 -->
             <div class="services-grid">
                 <!-- NapCat -->
@@ -778,10 +884,13 @@
             <div class="card" id="napcat-token-card" style="display:none;">
                 <h2><i data-lucide="key"></i> NapCat 登录信息</h2>
                 <div style="background:rgba(0,0,0,0.2);padding:14px;border-radius:10px;margin-bottom:10px;">
-                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">WebUI Token（点击打开按钮可自动登录）</div>
+                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">WebUI Token（复制后进入NC进行登录）</div>
                     <div style="display:flex;align-items:center;gap:10px;">
-                        <code id="napcat-token-value" style="flex:1;background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;word-break:break-all;">加载中...</code>
-                        <button class="svc-btn" onclick="copyNapCatToken()" style="white-space:nowrap;">
+                        <code id="napcat-token-value" style="flex:1;background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;word-break:break-all;">点击获取按钮查看</code>
+                        <button class="svc-btn" id="napcat-token-fetch-btn" onclick="fetchAndShowNapCatToken()" style="white-space:nowrap;">
+                            <i data-lucide="eye"></i> 获取
+                        </button>
+                        <button class="svc-btn" id="napcat-token-copy-btn" onclick="copyNapCatToken()" style="white-space:nowrap;display:none;">
                             <i data-lucide="copy"></i> 复制
                         </button>
                     </div>
@@ -791,52 +900,36 @@
                 </div>
             </div>
 
-            <!-- 快捷操作 -->
+            <!-- 配置教程 -->
             <div class="card">
-                <h2><i data-lucide="zap"></i> 快捷操作</h2>
+                <h2><i data-lucide="book-open"></i> 配置教程</h2>
                 <div class="quick-links">
                     <a class="quick-link" href="/tutorial/napcat">
-                        <i data-lucide="book-open"></i>
+                        <i data-lucide="cat"></i>
                         <span class="ql-text">NapCat 扫码登录教程</span>
                         <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
                     </a>
                     <a class="quick-link" href="/tutorial/astrbot">
-                        <i data-lucide="book-open"></i>
+                        <i data-lucide="bot"></i>
                         <span class="ql-text">AstrBot 配置教程</span>
                         <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
                     </a>
                     <a class="quick-link" href="/tutorial/tavern">
-                        <i data-lucide="book-open"></i>
+                        <i data-lucide="warehouse"></i>
                         <span class="ql-text">SillyTavern 使用指南</span>
                         <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
                     </a>
-                    <div class="quick-link" onclick="showChangeToken()">
-                        <i data-lucide="key"></i>
-                        <span class="ql-text">修改访问令牌 (Token)</span>
-                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
-                    </div>
                 </div>
             </div>
 
-            <!-- 系统信息 -->
+            <!-- 重置夜鹭机登录Token -->
             <div class="card">
-                <h2><i data-lucide="server"></i> 系统信息</h2>
-                <div class="sys-grid">
-                    <div class="sys-item">
-                        <div class="sys-label"><i data-lucide="globe"></i> 服务器 IP</div>
-                        <div class="sys-value" id="sys-ip">--</div>
-                    </div>
-                    <div class="sys-item">
-                        <div class="sys-label"><i data-lucide="clock"></i> 运行时间</div>
-                        <div class="sys-value" id="sys-uptime">--</div>
-                    </div>
-                    <div class="sys-item">
-                        <div class="sys-label"><i data-lucide="cpu"></i> 内存使用</div>
-                        <div class="sys-value" id="sys-mem">--</div>
-                    </div>
-                    <div class="sys-item">
-                        <div class="sys-label"><i data-lucide="hard-drive"></i> 磁盘使用</div>
-                        <div class="sys-value" id="sys-disk">--</div>
+                <h2><i data-lucide="key"></i> 重置夜鹭机登录Token</h2>
+                <div class="quick-links">
+                    <div class="quick-link" onclick="showChangeToken()">
+                        <i data-lucide="refresh-cw"></i>
+                        <span class="ql-text">修改管理面板访问令牌</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
                     </div>
                 </div>
             </div>
@@ -903,6 +996,22 @@
         <button class="btn btn-primary" style="margin-top:16px;width:auto;padding:12px 32px;" onclick="tryRestart()">
             <i data-lucide="refresh-cw"></i> 尝试重启
         </button>
+    </div>
+
+    <!-- ===== 公告弹窗 ===== -->
+    <div class="announcement-overlay" id="announcement-overlay" style="display:none;">
+        <div class="announcement-box">
+            <div class="title">📢 重要公告</div>
+            <div class="content" id="announcement-content"></div>
+            <div class="countdown" id="announcement-countdown"></div>
+            <button class="close-btn" id="announcement-close-btn" onclick="closeAnnouncement()" disabled>请阅读 (5s)</button>
+            <div class="announcement-list" id="announcement-list"></div>
+        </div>
+    </div>
+
+    <!-- ===== 底部栏 ===== -->
+    <div class="footer">
+        <p>夜鹭机 v0.2 · Build by <a href="https://github.com/Luna-channel" target="_blank">@Luna_Dol</a></p>
     </div>
 
     <script>
@@ -984,23 +1093,113 @@
             window.location.reload();
         }
 
+        // ===== 公告系统 =====
+        const ANNOUNCEMENTS = [
+            {
+                id: 1,
+                title: '免费分享声明',
+                pinned: true,
+                content: [
+                    '夜鹭机为免费分享，作者：Luna_Dol 内容为开源，禁止倒卖。',
+                    '如果你在任何渠道购买了夜鹭机，凭借退款+举报截图联系小红书 @柯尔速递 领取免费1对1技术支持。',
+                    '本内容可二传、二改，但禁止除作者本人外上传至DC中文酒馆社区。'
+                ]
+            }
+        ];
+
+        let announcementTimer = null;
+
+        function showAnnouncement(forceCountdown = false) {
+            const mainAnnouncement = ANNOUNCEMENTS.find(a => a.pinned) || ANNOUNCEMENTS[0];
+            
+            // 显示主公告内容（分段）
+            const contentEl = document.getElementById('announcement-content');
+            contentEl.innerHTML = mainAnnouncement.content.map(p => `<p style="margin-bottom:12px;padding-left:8px;border-left:3px solid var(--accent-blue);">${p}</p>`).join('');
+            
+            // 生成公告列表
+            const listEl = document.getElementById('announcement-list');
+            if (ANNOUNCEMENTS.length > 0) {
+                listEl.innerHTML = `
+                    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">
+                        <div style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:12px;text-align:left;">全部公告 (${ANNOUNCEMENTS.length})</div>
+                        ${ANNOUNCEMENTS.map(a => `
+                            <div class="announcement-item" id="ann-item-${a.id}" style="background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden;">
+                                <div onclick="toggleAnnouncementItem(${a.id})" style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+                                    <span style="font-size:0.9rem;color:var(--text-primary);display:flex;align-items:center;gap:8px;">
+                                        ${a.pinned ? '<span style="color:var(--accent-yellow);font-size:0.75rem;">📌 置顶</span>' : ''}
+                                        ${a.title}
+                                    </span>
+                                    <span class="arrow" style="color:var(--text-secondary);">▼</span>
+                                </div>
+                                <div class="ann-content" style="display:none;padding:0 14px 14px;font-size:0.85rem;line-height:1.7;color:var(--text-secondary);text-align:left;">
+                                    ${a.content.map(p => `<p style="margin-bottom:8px;">${p}</p>`).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            document.getElementById('announcement-overlay').style.display = 'flex';
+            const btn = document.getElementById('announcement-close-btn');
+            const countdownEl = document.getElementById('announcement-countdown');
+            
+            if (forceCountdown) {
+                btn.disabled = true;
+                let countdown = 5;
+                btn.textContent = `请阅读 (${countdown}s)`;
+                countdownEl.textContent = `请仔细阅读以上内容，${countdown}秒后可关闭`;
+                announcementTimer = setInterval(() => {
+                    countdown--;
+                    if (countdown > 0) {
+                        btn.textContent = `请阅读 (${countdown}s)`;
+                        countdownEl.textContent = `请仔细阅读以上内容，${countdown}秒后可关闭`;
+                    } else {
+                        clearInterval(announcementTimer);
+                        btn.disabled = false;
+                        btn.textContent = '我已阅读';
+                        countdownEl.textContent = '';
+                    }
+                }, 1000);
+            } else {
+                btn.disabled = false;
+                btn.textContent = '关闭';
+                countdownEl.textContent = '';
+            }
+        }
+
+        function toggleAnnouncementItem(id) {
+            const item = document.getElementById('ann-item-' + id);
+            if (item) {
+                const content = item.querySelector('.ann-content');
+                const arrow = item.querySelector('.arrow');
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    arrow.style.transform = 'rotate(180deg)';
+                } else {
+                    content.style.display = 'none';
+                    arrow.style.transform = '';
+                }
+            }
+        }
+
+        function closeAnnouncement() {
+            document.getElementById('announcement-overlay').style.display = 'none';
+            if (announcementTimer) {
+                clearInterval(announcementTimer);
+                announcementTimer = null;
+            }
+        }
+
         // ===== 初始化 =====
         document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
             
             // 安装选项联动
-            const installTavern = document.getElementById('install-tavern');
-            const tavernModeGroup = document.getElementById('tavern-mode-group');
             const installAstrbot = document.getElementById('install-astrbot');
             const astrbotPluginsSection = document.getElementById('astrbot-plugins-section');
             const installPlugins = document.getElementById('install-plugins');
             const pluginsList = document.getElementById('plugins-list');
-            
-            if (installTavern && tavernModeGroup) {
-                installTavern.addEventListener('change', () => {
-                    tavernModeGroup.style.display = installTavern.checked ? 'flex' : 'none';
-                });
-            }
             
             if (installAstrbot && astrbotPluginsSection) {
                 installAstrbot.addEventListener('change', () => {
@@ -1045,8 +1244,66 @@
             refreshSystemInfo();
             fetchNapCatToken();
             fetchTavernPassword();
+            checkServicesInstalled();
             if (statusInterval) clearInterval(statusInterval);
             statusInterval = setInterval(refreshStatus, 8000);
+        }
+
+        // ===== 服务安装状态检测 =====
+        async function checkServicesInstalled() {
+            try {
+                const res = await fetch('/api/services/installed');
+                const data = await res.json();
+                for (const [name, installed] of Object.entries(data)) {
+                    updateServiceInstallStatus(name, installed);
+                }
+            } catch(e) { console.error('检测服务安装状态失败', e); }
+        }
+
+        function updateServiceInstallStatus(name, installed) {
+            const card = document.getElementById('svc-' + name);
+            if (!card) return;
+            
+            // 移除旧的未安装提示
+            const oldWarning = card.querySelector('.svc-not-installed');
+            if (oldWarning) oldWarning.remove();
+            
+            if (!installed) {
+                // 服务未安装，显示重装按钮
+                const warning = document.createElement('div');
+                warning.className = 'svc-not-installed';
+                warning.style.cssText = 'margin-top:10px;padding:8px;background:rgba(192,57,43,0.15);border:1px solid var(--accent-red);border-radius:8px;font-size:0.8rem;color:var(--accent-red);';
+                warning.innerHTML = `
+                    <div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                        <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> 未安装或已卸载
+                    </div>
+                    <button class="svc-btn" onclick="reinstallService('${name}')" style="width:100%;justify-content:center;border-color:var(--accent-yellow);color:var(--accent-yellow);">
+                        <i data-lucide="download"></i> 重新安装
+                    </button>
+                `;
+                card.appendChild(warning);
+                lucide.createIcons();
+            }
+        }
+
+        async function reinstallService(name) {
+            const displayName = {napcat: 'NapCat', astrbot: 'AstrBot', sillytavern: 'SillyTavern'}[name] || name;
+            const confirmed = await showConfirm(`确定要重新安装 ${displayName} 吗？\n\n这将删除现有数据并重新部署。`, '重装确认');
+            if (!confirmed) return;
+            
+            // 跳转到进度页面
+            showSection('progress-section');
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('progress-text').textContent = `正在重装 ${displayName}...`;
+            document.getElementById('log-box').innerHTML = '';
+            
+            try {
+                await fetch(`/api/services/${name}/reinstall`, { method: 'POST' });
+                installInterval = setInterval(checkInstallStatus, 1000);
+            } catch(e) {
+                await showAlert('重装请求失败', 'error', '错误');
+                showDashboard();
+            }
         }
 
         // ===== 安装向导 =====
@@ -1055,7 +1312,6 @@
             const installAstrbot = document.getElementById('install-astrbot').checked;
             const tavernPort = parseInt(document.getElementById('tavern-port').value);
             const installPlugins = document.getElementById('install-plugins').checked;
-            const enableMultiuser = document.getElementById('enable-multiuser').checked;
             const selectedPlugins = [];
             document.querySelectorAll('input[name="plugin"]:checked').forEach(cb => {
                 selectedPlugins.push(parseInt(cb.value));
@@ -1078,7 +1334,6 @@
                     install_astrbot: installAstrbot,
                     tavern_port: tavernPort,
                     install_plugins: installPlugins && installAstrbot,
-                    enable_multi_user: enableMultiuser,
                     selected_plugins: selectedPlugins
                 })
             });
@@ -1265,21 +1520,44 @@
         }
 
         async function fetchNapCatToken() {
+            // 初始化时只显示卡片，不显示具体token（需点击获取）
+            const card = document.getElementById('napcat-token-card');
+            card.style.display = 'block';
+        }
+
+        async function fetchAndShowNapCatToken() {
+            const valueEl = document.getElementById('napcat-token-value');
+            const fetchBtn = document.getElementById('napcat-token-fetch-btn');
+            const copyBtn = document.getElementById('napcat-token-copy-btn');
+            
+            fetchBtn.disabled = true;
+            fetchBtn.innerHTML = '<i data-lucide="loader"></i> 获取中...';
+            lucide.createIcons();
+            
             try {
                 const res = await fetch('/api/napcat/token');
                 const data = await res.json();
                 napCatTokenData = data;
-                const card = document.getElementById('napcat-token-card');
-                const valueEl = document.getElementById('napcat-token-value');
                 if (data.token) {
-                    card.style.display = 'block';
                     valueEl.textContent = data.token;
+                    valueEl.style.color = 'var(--accent-yellow)';
+                    fetchBtn.style.display = 'none';
+                    copyBtn.style.display = 'inline-flex';
                 } else {
-                    card.style.display = 'block';
                     valueEl.textContent = '未获取到（容器可能还在初始化）';
                     valueEl.style.color = 'var(--text-secondary)';
+                    fetchBtn.disabled = false;
+                    fetchBtn.innerHTML = '<i data-lucide="eye"></i> 重试';
                 }
-            } catch(e) { console.error('获取NapCat Token失败', e); }
+                lucide.createIcons();
+            } catch(e) {
+                console.error('获取NapCat Token失败', e);
+                valueEl.textContent = '获取失败，请重试';
+                valueEl.style.color = 'var(--accent-red)';
+                fetchBtn.disabled = false;
+                fetchBtn.innerHTML = '<i data-lucide="eye"></i> 重试';
+                lucide.createIcons();
+            }
         }
 
         function copyNapCatToken() {
@@ -1371,7 +1649,9 @@
                 if (data.success) {
                     successEl.textContent = data.message;
                     successEl.classList.add('show');
-                    setTimeout(() => { window.location.href = '/login'; }, 1500);
+                    hideChangeToken();
+                    // 先跳转登录页，带参数让登录页显示公告
+                    window.location.href = '/login?show_announcement=1';
                 } else {
                     errEl.textContent = data.error || '修改失败';
                     errEl.classList.add('show');

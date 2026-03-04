@@ -30,7 +30,6 @@ DEFAULT_CONFIG = {
     "napcat_port": 6099,
     "tavern_port": 18888,
     "install_plugins": True,
-    "enable_multi_user": True,
     "server_ip": ""
 }
 
@@ -522,6 +521,10 @@ def deploy_sillytavern():
         if not success:
             log("SillyTavern 仓库克隆失败")
             return False
+    # 再次验证克隆是否成功（防止 git 返回成功但目录为空的情况）
+    if not os.path.exists(package_json):
+        log("克隆后 package.json 不存在，目录可能不完整")
+        return False
     log("安装npm依赖...")
     install_status["message"] = "安装 npm 依赖（可能需要几分钟）..."
     install_success = False
@@ -543,8 +546,6 @@ def deploy_sillytavern():
     # 关键：必须包含 securityOverride: true，否则 listen:true + whitelistMode:false 时
     # SillyTavern 的 logSecurityAlert() 会直接 process.exit(1) 杀死进程
     log("配置SillyTavern...")
-    multi_user = str(config.get('enable_multi_user', True)).lower()
-    log(f"多用户模式设置: enableUserAccounts={multi_user}")
     config_content = f"""dataRoot: ./data
 listen: true
 listenAddress:
@@ -563,7 +564,7 @@ browserLaunch:
 port: {config['tavern_port']}
 whitelistMode: false
 basicAuthMode: false
-enableUserAccounts: {multi_user}
+enableUserAccounts: false
 enableDiscreetLogin: true
 sessionTimeout: 86400
 securityOverride: true
@@ -946,8 +947,13 @@ def auth_login():
 
 @app.route("/api/auth/logout", methods=["POST"])
 def auth_logout():
-    """退出登录"""
+    """退出登录并关闭服务器"""
     session.clear()
+    # 延迟关闭服务器，让响应先返回
+    def shutdown_server():
+        time.sleep(1)
+        os._exit(0)
+    threading.Thread(target=shutdown_server, daemon=True).start()
     return jsonify({"success": True})
 
 
@@ -984,8 +990,7 @@ def index():
         "napcat_port": config.get("napcat_port", 6099),
         "tavern_port": config.get("tavern_port", 18888),
         "server_ip": config.get("server_ip", ""),
-        "install_plugins": config.get("install_plugins", True),
-        "enable_multi_user": config.get("enable_multi_user", True)
+        "install_plugins": config.get("install_plugins", True)
     }
     return render_template("index.html",
                            plugins=ASTRBOT_PLUGINS,
@@ -1058,6 +1063,97 @@ def api_napcat_token():
         "url": napcat_url,
         "config_path": "/opt/astrbot/napcat/config/webui.json"
     })
+
+
+# ========== 路由：服务安装状态检测 ==========
+
+def check_service_installed(name):
+    """检测服务是否已安装"""
+    if name == "sillytavern":
+        # 检查 SillyTavern 目录和 package.json 是否存在
+        tavern_dir = "/opt/sillytavern"
+        package_json = os.path.join(tavern_dir, "package.json")
+        return os.path.exists(package_json)
+    elif name == "astrbot":
+        # 检查 AstrBot 容器是否存在
+        ok, output = run_command("docker ps -a --format '{{.Names}}' | grep -w astrbot", quiet=True)
+        return ok and "astrbot" in output
+    elif name == "napcat":
+        # 检查 NapCat 容器是否存在
+        ok, output = run_command("docker ps -a --format '{{.Names}}' | grep -w napcat", quiet=True)
+        return ok and "napcat" in output
+    return False
+
+
+@app.route("/api/services/installed")
+@login_required
+def api_services_installed():
+    """检测各服务安装状态"""
+    return jsonify({
+        "napcat": check_service_installed("napcat"),
+        "astrbot": check_service_installed("astrbot"),
+        "sillytavern": check_service_installed("sillytavern")
+    })
+
+
+@app.route("/api/services/<name>/reinstall", methods=["POST"])
+@login_required
+def api_service_reinstall(name):
+    """重装单个服务"""
+    global install_status, install_generation
+    valid_names = {"napcat", "astrbot", "sillytavern"}
+    if name not in valid_names:
+        return jsonify({"error": f"未知服务: {name}"}), 400
+    
+    install_generation += 1
+    install_status = {
+        "stage": "installing",
+        "progress": 0,
+        "message": f"重装 {name}...",
+        "logs": [],
+        "results": {}
+    }
+    
+    def do_reinstall():
+        global install_status
+        try:
+            if name == "sillytavern":
+                install_status["message"] = "重装 SillyTavern..."
+                log("开始重装 SillyTavern...")
+                # 删除旧目录
+                run_command("rm -rf /opt/sillytavern")
+                install_status["progress"] = 20
+                # 重新部署
+                if deploy_sillytavern():
+                    install_status["progress"] = 100
+                    install_status["stage"] = "completed"
+                    install_status["message"] = "SillyTavern 重装完成"
+                    log("SillyTavern 重装完成")
+                else:
+                    raise Exception("SillyTavern 部署失败")
+            elif name in ["astrbot", "napcat"]:
+                install_status["message"] = "重装 AstrBot + NapCat..."
+                log("开始重装 AstrBot + NapCat...")
+                # 停止并删除容器
+                run_command("docker stop astrbot napcat 2>/dev/null || true")
+                run_command("docker rm astrbot napcat 2>/dev/null || true")
+                install_status["progress"] = 20
+                # 重新部署
+                if deploy_astrbot():
+                    install_status["progress"] = 100
+                    install_status["stage"] = "completed"
+                    install_status["message"] = "AstrBot + NapCat 重装完成"
+                    log("AstrBot + NapCat 重装完成")
+                else:
+                    raise Exception("AstrBot 部署失败")
+        except Exception as e:
+            install_status["stage"] = "error"
+            install_status["message"] = str(e)
+            log(f"重装失败: {str(e)}")
+    
+    thread = threading.Thread(target=do_reinstall, daemon=True)
+    thread.start()
+    return jsonify({"success": True})
 
 
 # ========== 路由：系统信息 ==========
@@ -1163,8 +1259,6 @@ def start_install():
         config["tavern_port"] = int(data["tavern_port"])
     if "install_plugins" in data:
         config["install_plugins"] = data["install_plugins"]
-    if "enable_multi_user" in data:
-        config["enable_multi_user"] = data["enable_multi_user"]
     if "selected_plugins" in data:
         for i, plugin in enumerate(ASTRBOT_PLUGINS):
             plugin["selected"] = i in data["selected_plugins"]

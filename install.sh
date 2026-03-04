@@ -428,6 +428,11 @@ networks:
 def deploy_sillytavern():
     log("部署SillyTavern...")
     tavern_dir = "/opt/sillytavern"
+    package_json = os.path.join(tavern_dir, "package.json")
+    # 检查目录存在但 package.json 不存在（之前克隆失败的残留）
+    if os.path.exists(tavern_dir) and not os.path.exists(package_json):
+        log("检测到不完整的 SillyTavern 目录，清理后重新克隆...")
+        run_command(f"rm -rf {tavern_dir}")
     if not os.path.exists(tavern_dir):
         log("克隆SillyTavern...")
         install_status["message"] = "克隆 SillyTavern 仓库..."
@@ -436,6 +441,10 @@ def deploy_sillytavern():
             success, _ = run_command(f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}", stream=True)
         if not success:
             return False
+    # 再次验证克隆是否成功
+    if not os.path.exists(package_json):
+        log("克隆后 package.json 不存在，目录可能不完整")
+        return False
     log("安装npm依赖...")
     # 使用淘宝镜像加速 npm
     npm_cmd = "npm install --no-audit --no-fund --registry=https://registry.npmmirror.com"
