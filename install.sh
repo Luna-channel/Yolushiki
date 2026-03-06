@@ -270,8 +270,7 @@ config = {
     "astrbot_port": 6185,
     "napcat_port": 6099,
     "tavern_port": 18888,
-    "install_plugins": True,
-    "enable_multi_user": True
+    "install_plugins": True
 }
 
 ASTRBOT_PLUGINS = [
@@ -364,7 +363,7 @@ def install_pm2():
         log(f"PM2已安装: {output.strip()}")
         return True
     log("PM2未安装，开始安装...")
-    success, _ = run_command("npm install -g pm2 --registry=https://registry.npmmirror.com")
+    success, _ = run_command("npm install -g pm2")
     return success
 
 def deploy_astrbot():
@@ -436,9 +435,7 @@ def deploy_sillytavern():
     if not os.path.exists(tavern_dir):
         log("克隆SillyTavern...")
         install_status["message"] = "克隆 SillyTavern 仓库..."
-        success, _ = run_command(f"git clone --depth 1 --progress https://gh.llkk.cc/https://github.com/SillyTavern/SillyTavern.git {tavern_dir}", stream=True)
-        if not success:
-            success, _ = run_command(f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}", stream=True)
+        success, _ = run_command(f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}", stream=True)
         if not success:
             return False
     # 再次验证克隆是否成功
@@ -446,8 +443,7 @@ def deploy_sillytavern():
         log("克隆后 package.json 不存在，目录可能不完整")
         return False
     log("安装npm依赖...")
-    # 使用淘宝镜像加速 npm
-    npm_cmd = "npm install --no-audit --no-fund --registry=https://registry.npmmirror.com"
+    npm_cmd = "npm install --no-audit --no-fund"
     install_status["message"] = "安装 npm 依赖..."
     install_success = False
     for attempt in range(3):
@@ -456,7 +452,12 @@ def deploy_sillytavern():
             run_command("rm -rf node_modules", cwd=tavern_dir)
             run_command("npm cache clean --force", cwd=tavern_dir)
         success, _ = run_command(npm_cmd, cwd=tavern_dir)
+        node_modules = os.path.join(tavern_dir, "node_modules")
         if success:
+            install_success = True
+            break
+        elif os.path.exists(node_modules) and len(os.listdir(node_modules)) > 10:
+            log("npm 返回码非0，但 node_modules 已存在，视为成功")
             install_success = True
             break
     if not install_success:
@@ -464,7 +465,6 @@ def deploy_sillytavern():
         return False
     log("配置SillyTavern...")
     config_path = os.path.join(tavern_dir, "config.yaml")
-    multi_user = str(config['enable_multi_user']).lower()
     # 直接写入完整config.yaml（不再依赖timeout+sed的脆弱方式）
     config_content = f"""dataRoot: ./data
 listen: true
@@ -484,8 +484,8 @@ browserLaunch:
 port: {config['tavern_port']}
 whitelistMode: false
 basicAuthMode: false
-enableUserAccounts: {multi_user}
-enableDiscreetLogin: true
+enableUserAccounts: true
+enableDiscreetLogin: false
 sessionTimeout: 86400
 securityOverride: true
 disableCsrfProtection: false
@@ -513,13 +513,13 @@ disableCsrfProtection: false
 def set_sillytavern_password(tavern_dir):
     import glob, hashlib, base64
     storage_dir = os.path.join(tavern_dir, "data", "_storage")
-    for _ in range(10):
+    for _ in range(15):
         if os.path.exists(storage_dir):
             break
         import time as _t2
         _t2.sleep(1)
     if not os.path.exists(storage_dir):
-        log("SillyTavern 存储目录未创建，跳过密码设置")
+        log("SillyTavern 存储目录未创建，跳过账号设置")
         return
     user_files = glob.glob(os.path.join(storage_dir, "*.json"))
     target_file = None
@@ -533,9 +533,13 @@ def set_sillytavern_password(tavern_dir):
         except:
             continue
     if not target_file:
-        log("未找到 default-user 存储文件，跳过密码设置")
+        log("未找到 default-user 存储文件，跳过账号设置")
         return
-    password = secrets.token_urlsafe(12)
+    username = config.get("tavern_username", "admin")
+    password = config.get("tavern_password", "")
+    if not password:
+        password = secrets.token_urlsafe(12)
+        log(f"未设置密码，自动生成: {password}")
     salt = base64.b64encode(os.urandom(16)).decode('utf-8')
     password_hash = hashlib.scrypt(password.encode('utf-8'), salt=salt.encode('utf-8'), n=16384, r=8, p=1, dklen=64)
     password_hash_b64 = base64.b64encode(password_hash).decode('utf-8')
@@ -544,13 +548,22 @@ def set_sillytavern_password(tavern_dir):
             data = json.load(fp)
         data["value"]["password"] = password_hash_b64
         data["value"]["salt"] = salt
+        data["key"] = f"user:{username}"
+        data["value"]["name"] = username
+        data["value"]["admin"] = True
+        data["value"]["enabled"] = True
         with open(target_file, "w", encoding="utf-8") as fp:
             json.dump(data, fp, ensure_ascii=False)
+        config["tavern_username"] = username
         config["tavern_password"] = password
         save_config()
-        log(f"SillyTavern 初始密码已设置: {password}")
+        log(f"SillyTavern 账号已设置 - 用户名: {username}")
+        log("重启 SillyTavern 以应用账号设置...")
+        run_command("pm2 restart sillytavern", quiet=True)
+        import time as _t3
+        _t3.sleep(3)
     except Exception as e:
-        log(f"设置 SillyTavern 密码失败: {e}")
+        log(f"设置 SillyTavern 账号失败: {e}")
 
 def install_astrbot_plugins(selected_plugins):
     log("安装AstrBot插件...")
@@ -564,10 +577,9 @@ def install_astrbot_plugins(selected_plugins):
                 log(f"插件已存在: {plugin['name']}")
                 continue
             log(f"安装插件: {plugin['name']}")
-            mirror_repo = plugin['repo'].replace('https://github.com/', 'https://gh.llkk.cc/https://github.com/')
-            success, _ = run_command(f"git clone {mirror_repo} {plugin_name}", cwd=plugins_dir)
+            success, _ = run_command(f"git clone {plugin['repo']} {plugin_name}", cwd=plugins_dir)
             if not success:
-                run_command(f"git clone {plugin['repo']} {plugin_name}", cwd=plugins_dir)
+                log(f"插件安装失败: {plugin['name']}")
 
 def configure_firewall():
     log("配置防火墙...")
@@ -652,8 +664,7 @@ def index():
         "napcat_port": config.get("napcat_port", 6099),
         "tavern_port": config.get("tavern_port", 18888),
         "server_ip": "",
-        "install_plugins": config.get("install_plugins", True),
-        "enable_multi_user": config.get("enable_multi_user", True)
+        "install_plugins": config.get("install_plugins", True)
     }
     return render_template("index.html", plugins=ASTRBOT_PLUGINS, config=safe_config)
 
@@ -670,8 +681,6 @@ def start_install():
         config["tavern_port"] = int(data["tavern_port"])
     if "install_plugins" in data:
         config["install_plugins"] = data["install_plugins"]
-    if "enable_multi_user" in data:
-        config["enable_multi_user"] = data["enable_multi_user"]
     if "selected_plugins" in data:
         for i, plugin in enumerate(ASTRBOT_PLUGINS):
             plugin["selected"] = i in data["selected_plugins"]
@@ -761,7 +770,7 @@ PYTHON_EOF
             fetch('/api/install', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tavern_port: port, install_plugins: true, enable_multi_user: true, selected_plugins: [0,1,2,3] })
+                body: JSON.stringify({ tavern_port: port, install_plugins: true, selected_plugins: [0,1,2,3] })
             });
             interval = setInterval(checkStatus, 2000);
         }

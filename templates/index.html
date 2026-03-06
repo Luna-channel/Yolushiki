@@ -697,10 +697,26 @@
                     <input type="checkbox" id="install-tavern" checked>
                     <label for="install-tavern">安装 SillyTavern</label>
                 </div>
-                <p class="hint" id="tavern-hint" style="margin-left: 24px; margin-top: 8px; font-size: 0.85rem; color: var(--accent-yellow);">
-                    <i data-lucide="alert-circle" style="width:14px;height:14px;display:inline;vertical-align:middle;"></i>
-                    安装完成后请务必在酒馆设置中启用多用户模式并设置管理员密码！
-                </p>
+                <div id="tavern-credentials" style="margin-left: 24px; margin-top: 12px;">
+                    <p class="hint" style="font-size: 0.85rem; color: var(--accent-yellow); margin-bottom: 12px;">
+                        <i data-lucide="shield" style="width:14px;height:14px;display:inline;vertical-align:middle;"></i>
+                        设置云酒馆登录账号（安装后需要用这个账号密码登录酒馆）
+                    </p>
+                    <div class="form-group" style="margin-bottom:12px;">
+                        <label for="tavern-username">用户名 <span style="color:var(--accent-red);">*必填</span></label>
+                        <input type="text" id="tavern-username" value="admin" placeholder="设置酒馆登录用户名" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,0.3);color:#fff;font-size:1rem;">
+                        <div class="hint">登录酒馆时使用的用户名，建议用英文</div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:12px;">
+                        <label for="tavern-password">密码 <span style="color:var(--accent-red);">*必填</span></label>
+                        <input type="password" id="tavern-password" placeholder="设置酒馆登录密码（至少6位）" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,0.3);color:#fff;font-size:1rem;">
+                        <div class="hint">请牢记此密码，安装完成后需要用它登录酒馆</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="tavern-password-confirm">确认密码 <span style="color:var(--accent-red);">*必填</span></label>
+                        <input type="password" id="tavern-password-confirm" placeholder="再次输入密码" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,0.3);color:#fff;font-size:1rem;">
+                    </div>
+                </div>
             </div>
 
             <div class="card">
@@ -745,15 +761,27 @@
                 <div class="progress-text" id="progress-text">准备中...</div>
                 <div class="log-box" id="log-box"></div>
                 
-                <!-- 超时提示面板 -->
-                <div id="timeout-panel" class="timeout-panel hidden">
-                    <div class="timeout-title"><i data-lucide="alert-triangle"></i> 检测到下载缓慢/超时</div>
-                    <p>Docker 镜像下载可能因网络问题卡住，点击下方按钮配置镜像加速：</p>
-                    <div class="mirror-buttons">
-                        <button class="btn btn-secondary" onclick="applyMirror('1panel')">1Panel 镜像</button>
-                        <button class="btn btn-secondary" onclick="applyMirror('daocloud')">DaoCloud 镜像</button>
-                        <button class="btn btn-secondary" onclick="applyMirror('aliyun')">阿里云镜像</button>
-                        <button class="btn btn-secondary" onclick="applyMirror('direct')">直连 Docker Hub（海外）</button>
+                <!-- 镜像/加速切换面板（下载阶段始终显示） -->
+                <div id="mirror-help-panel" class="timeout-panel hidden">
+                    <div class="timeout-title"><i data-lucide="zap"></i> <span id="mirror-help-title">网络加速选项</span></div>
+                    <p id="mirror-help-desc" style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:4px;">如果下载速度很慢（日志中显示仅几十 KB/s 或长时间无进度），可切换镜像加速。切换后将自动重试当前步骤，不会重启整个安装。</p>
+                    <!-- Docker 镜像选项 -->
+                    <div id="mirror-docker-options" class="mirror-buttons hidden">
+                        <button class="btn btn-secondary" onclick="switchMirror('docker','1panel')">1Panel 镜像</button>
+                        <button class="btn btn-secondary" onclick="switchMirror('docker','daocloud')">DaoCloud 镜像</button>
+                        <button class="btn btn-secondary" onclick="switchMirror('docker','aliyun')">阿里云镜像</button>
+                        <button class="btn btn-secondary" onclick="switchMirror('docker','direct')">直连 Docker Hub（海外）</button>
+                    </div>
+                    <!-- Git 代理选项 -->
+                    <div id="mirror-git-options" class="mirror-buttons hidden">
+                        <button class="btn btn-secondary" onclick="switchMirror('git','ghproxy')">GitHub 加速代理</button>
+                        <button class="btn btn-secondary" onclick="switchMirror('git','direct')">直连 GitHub（海外/已有代理）</button>
+                    </div>
+                    <!-- npm 镜像选项 -->
+                    <div id="mirror-npm-options" class="mirror-buttons hidden">
+                        <button class="btn btn-secondary" onclick="switchMirror('npm','taobao')">淘宝 npm 镜像</button>
+                        <button class="btn btn-secondary" onclick="switchMirror('npm','tencent')">腾讯 npm 镜像</button>
+                        <button class="btn btn-secondary" onclick="switchMirror('npm','direct')">npm 官方源（海外）</button>
                     </div>
                 </div>
                 
@@ -761,18 +789,8 @@
                 <div id="error-panel" class="error-panel hidden">
                     <div class="error-title"><i data-lucide="x-circle"></i> 安装失败</div>
                     <p id="error-message">未知错误</p>
-                    <!-- Docker 拉取失败时显示换源选项 -->
-                    <div id="error-mirror-panel" class="hidden" style="margin-top:12px;padding:12px;background:rgba(212,160,23,0.1);border:1px solid var(--accent-yellow);border-radius:8px;">
-                        <div style="color:var(--accent-yellow);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
-                            <i data-lucide="alert-triangle" style="width:16px;height:16px;"></i> Docker 镜像拉取失败，建议先换源再重试
-                        </div>
-                        <div class="mirror-buttons">
-                            <button class="btn btn-secondary" onclick="applyMirror('1panel')">1Panel 镜像</button>
-                            <button class="btn btn-secondary" onclick="applyMirror('daocloud')">DaoCloud 镜像</button>
-                            <button class="btn btn-secondary" onclick="applyMirror('aliyun')">阿里云镜像</button>
-                            <button class="btn btn-secondary" onclick="applyMirror('direct')">直连 Docker Hub（海外）</button>
-                        </div>
-                    </div>
+                    <!-- 失败时的换源提示（由上方镜像面板统一处理） -->
+                    <p style="font-size:0.85rem;color:var(--text-secondary);margin-top:8px;">可使用上方的镜像加速选项切换源后自动重试，或点击下方按钮重新开始完整安装。</p>
                     <div class="error-buttons">
                         <button class="btn btn-primary" onclick="retryInstall()"><i data-lucide="refresh-cw"></i> 重试安装</button>
                         <button class="btn btn-secondary" onclick="showSetup()"><i data-lucide="arrow-left"></i> 返回配置</button>
@@ -861,13 +879,13 @@
                 </div>
             </div>
 
-            <!-- 云酒馆初始密码 -->
+            <!-- 云酒馆登录信息 -->
             <div class="card" id="tavern-password-card" style="display:none;">
                 <h2><i data-lucide="key"></i> 云酒馆登录信息</h2>
                 <div style="background:rgba(0,0,0,0.2);padding:14px;border-radius:10px;margin-bottom:10px;">
                     <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">用户名</div>
-                    <code style="background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-blue-light);font-size:0.9rem;display:block;margin-bottom:12px;">default-user</code>
-                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">初始密码</div>
+                    <code id="tavern-username-value" style="background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-blue-light);font-size:0.9rem;display:block;margin-bottom:12px;">--</code>
+                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">密码</div>
                     <div style="display:flex;align-items:center;gap:10px;">
                         <code id="tavern-password-value" style="flex:1;background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;font-family:monospace;">--</code>
                         <button class="svc-btn" onclick="copyTavernPassword()" style="white-space:nowrap;">
@@ -876,7 +894,7 @@
                     </div>
                 </div>
                 <div style="font-size:0.75rem;color:var(--text-secondary);">
-                    💡 登录后可在酒馆设置中修改密码
+                    💡 登录后可在酒馆 设置→用户管理 中修改用户名和密码
                 </div>
             </div>
 
@@ -1307,6 +1325,12 @@
         }
 
         // ===== 安装向导 =====
+        // 酒馆勾选联动
+        document.getElementById('install-tavern')?.addEventListener('change', function() {
+            const creds = document.getElementById('tavern-credentials');
+            if (creds) creds.style.display = this.checked ? 'block' : 'none';
+        });
+
         async function startInstall() {
             const installTavern = document.getElementById('install-tavern').checked;
             const installAstrbot = document.getElementById('install-astrbot').checked;
@@ -1325,6 +1349,30 @@
                 await showAlert('端口必须在 1024-65535 之间', 'warning', '提示');
                 return;
             }
+            // 酒馆用户名密码校验
+            let tavernUsername = '';
+            let tavernPassword = '';
+            if (installTavern) {
+                tavernUsername = document.getElementById('tavern-username').value.trim();
+                tavernPassword = document.getElementById('tavern-password').value;
+                const tavernPasswordConfirm = document.getElementById('tavern-password-confirm').value;
+                if (!tavernUsername) {
+                    await showAlert('请设置酒馆登录用户名', 'warning', '提示');
+                    return;
+                }
+                if (/[^a-zA-Z0-9_\-]/.test(tavernUsername)) {
+                    await showAlert('用户名只能包含英文字母、数字、下划线和横线', 'warning', '提示');
+                    return;
+                }
+                if (!tavernPassword || tavernPassword.length < 6) {
+                    await showAlert('酒馆密码至少 6 位', 'warning', '提示');
+                    return;
+                }
+                if (tavernPassword !== tavernPasswordConfirm) {
+                    await showAlert('两次输入的密码不一致', 'warning', '提示');
+                    return;
+                }
+            }
             showSection('progress-section');
             fetch('/api/install', {
                 method: 'POST',
@@ -1334,14 +1382,16 @@
                     install_astrbot: installAstrbot,
                     tavern_port: tavernPort,
                     install_plugins: installPlugins && installAstrbot,
-                    selected_plugins: selectedPlugins
+                    selected_plugins: selectedPlugins,
+                    tavern_username: tavernUsername,
+                    tavern_password: tavernPassword
                 })
             });
             installInterval = setInterval(checkInstallStatus, 1000);
         }
 
-        let lastLogLength = 0;
-        let noLogUpdateCount = 0;
+        // 下载类阶段列表
+        const DOWNLOAD_STAGES = ['docker_pull', 'git_clone', 'npm_install'];
         
         function checkInstallStatus() {
             fetch('/api/status')
@@ -1356,40 +1406,50 @@
                     logBox.innerHTML = logs.map(l => '<div class="log-line">' + l + '</div>').join('');
                     logBox.scrollTop = logBox.scrollHeight;
                     
-                    // 超时检测：日志60秒无更新才显示提示
-                    const currentLogLength = logs.join('').length;
-                    if (currentLogLength === lastLogLength && progress > 0 && progress < 100) {
-                        noLogUpdateCount++;
-                        if (noLogUpdateCount >= 60) {  // 60秒日志无变化
-                            document.getElementById('timeout-panel').classList.remove('hidden');
+                    // 根据 current_stage 显示/隐藏镜像切换面板
+                    const cs = data.current_stage || '';
+                    const mirrorPanel = document.getElementById('mirror-help-panel');
+                    const dockerOpts = document.getElementById('mirror-docker-options');
+                    const gitOpts = document.getElementById('mirror-git-options');
+                    const npmOpts = document.getElementById('mirror-npm-options');
+                    const titleEl = document.getElementById('mirror-help-title');
+                    const descEl = document.getElementById('mirror-help-desc');
+                    
+                    if (DOWNLOAD_STAGES.includes(cs) && data.stage === 'installing') {
+                        mirrorPanel.classList.remove('hidden');
+                        dockerOpts.classList.add('hidden');
+                        gitOpts.classList.add('hidden');
+                        npmOpts.classList.add('hidden');
+                        if (cs === 'docker_pull') {
+                            titleEl.textContent = 'Docker 镜像加速';
+                            descEl.textContent = '如果 Docker 拉取很慢（日志中显示仅几十 KB/s 或长时间卡住），可切换镜像源加速。切换后自动重试当前步骤。';
+                            dockerOpts.classList.remove('hidden');
+                        } else if (cs === 'git_clone') {
+                            titleEl.textContent = 'GitHub 加速';
+                            descEl.textContent = '如果 git clone 很慢（速度仅几十 KB/s 或长时间无进度），可使用 GitHub 加速代理。切换后自动重试当前步骤。';
+                            gitOpts.classList.remove('hidden');
+                        } else if (cs === 'npm_install') {
+                            titleEl.textContent = 'npm 镜像加速';
+                            descEl.textContent = '如果 npm install 很慢或显示超时错误，可切换 npm 镜像源加速。切换后自动重试当前步骤。';
+                            npmOpts.classList.remove('hidden');
                         }
+                        lucide.createIcons();
                     } else {
-                        noLogUpdateCount = 0;
-                        lastLogLength = currentLogLength;
-                        document.getElementById('timeout-panel').classList.add('hidden');
+                        mirrorPanel.classList.add('hidden');
                     }
                     
                     if (data.stage === 'completed') {
                         clearInterval(installInterval);
-                        document.getElementById('timeout-panel').classList.add('hidden');
+                        mirrorPanel.classList.add('hidden');
                         document.getElementById('error-panel').classList.add('hidden');
                         setTimeout(() => showDashboard(), 1500);
                     } else if (data.stage === 'error') {
                         clearInterval(installInterval);
-                        document.getElementById('timeout-panel').classList.add('hidden');
                         document.getElementById('error-panel').classList.remove('hidden');
                         document.getElementById('error-message').textContent = data.message;
-                        // Docker 相关错误时显示换源按钮
-                        const msg = data.message.toLowerCase();
-                        const logs = (data.logs || []).join(' ').toLowerCase();
-                        const isDockerErr = msg.includes('docker') || msg.includes('astrbot') || 
-                            logs.includes('pull access denied') || logs.includes('镜像') || logs.includes('timeout');
-                        const mirrorPanel = document.getElementById('error-mirror-panel');
-                        if (isDockerErr && mirrorPanel) {
+                        // 错误时也显示对应阶段的换源选项
+                        if (DOWNLOAD_STAGES.includes(cs)) {
                             mirrorPanel.classList.remove('hidden');
-                            lucide.createIcons();
-                        } else if (mirrorPanel) {
-                            mirrorPanel.classList.add('hidden');
                         }
                     }
                 });
@@ -1397,31 +1457,40 @@
         
         function retryInstall() {
             document.getElementById('error-panel').classList.add('hidden');
-            document.getElementById('timeout-panel').classList.add('hidden');
-            lastLogLength = 0;
-            noLogUpdateCount = 0;
+            document.getElementById('mirror-help-panel').classList.add('hidden');
             startInstall();
         }
         
-        async function applyMirror(mirror) {
+        async function switchMirror(type, value) {
             const btn = event.target;
             const originalText = btn.textContent;
             btn.disabled = true;
-            btn.textContent = '配置中...';
+            btn.textContent = '切换中...';
             try {
-                const res = await fetch('/api/docker/mirror', {
+                // 1. 切换镜像
+                const res = await fetch('/api/mirrors/set', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mirror: mirror })
+                    body: JSON.stringify({ type: type, value: value })
                 });
                 const data = await res.json();
-                if (data.success) {
-                    await showAlert('镜像配置成功，请点击"重试安装"', 'success', '配置成功');
-                    document.getElementById('timeout-panel').classList.add('hidden');
-                    document.getElementById('error-panel').classList.remove('hidden');
-                    document.getElementById('error-message').textContent = '已配置镜像加速，请重试';
-                } else {
+                if (!data.success) {
                     await showAlert('配置失败: ' + (data.error || '未知错误'), 'error', '错误');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    return;
+                }
+                // 2. 仅重试当前阶段
+                btn.textContent = '重试中...';
+                const retryRes = await fetch('/api/install/retry-stage', { method: 'POST' });
+                const retryData = await retryRes.json();
+                if (retryData.success) {
+                    document.getElementById('error-panel').classList.add('hidden');
+                    // 重新启动轮询
+                    if (installInterval) clearInterval(installInterval);
+                    installInterval = setInterval(checkInstallStatus, 1000);
+                } else {
+                    await showAlert('重试失败: ' + (retryData.error || '未知错误'), 'error', '错误');
                 }
             } catch(e) {
                 await showAlert('网络错误', 'error', '错误');
@@ -1574,10 +1643,12 @@
                 const res = await fetch('/api/system/info');
                 const data = await res.json();
                 const card = document.getElementById('tavern-password-card');
-                const valueEl = document.getElementById('tavern-password-value');
+                const pwdEl = document.getElementById('tavern-password-value');
+                const userEl = document.getElementById('tavern-username-value');
                 if (data.tavern_password) {
                     card.style.display = 'block';
-                    valueEl.textContent = data.tavern_password;
+                    pwdEl.textContent = data.tavern_password;
+                    userEl.textContent = data.tavern_username || 'admin';
                 }
             } catch(e) { console.error('获取酒馆密码失败', e); }
         }

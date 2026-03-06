@@ -62,9 +62,16 @@ install_status = {
     "progress": 0,
     "message": "",
     "logs": [],
-    "results": {}
+    "results": {},
+    "current_stage": ""  # docker_pull, git_clone, npm_install, 等
 }
 install_generation = 0  # 安装代数，重试时递增，旧线程检测到不匹配则退出
+
+# 镜像/加速配置（运行时可切换）
+runtime_mirrors = {
+    "npm_registry": "",       # 空=官方源, 或 https://registry.npmmirror.com
+    "git_proxy": "",          # 空=直连GitHub, 或 https://gh.llkk.cc/
+}
 
 # 插件列表
 ASTRBOT_PLUGINS = [
@@ -320,7 +327,8 @@ def get_system_info():
     # 运行时间
     ok, out = run_command("cat /proc/uptime", quiet=True)
     info["uptime_seconds"] = int(float(out.split()[0])) if ok else 0
-    # 酒馆初始密码
+    # 酒馆登录信息
+    info["tavern_username"] = config.get("tavern_username", "")
     info["tavern_password"] = config.get("tavern_password", "")
     return info
 
@@ -426,7 +434,11 @@ def install_pm2():
         log(f"PM2已安装: {output.strip()}")
         return True
     log("PM2未安装，开始安装...")
-    success, _ = run_command("npm install -g pm2 --registry=https://registry.npmmirror.com")
+    npm_registry = runtime_mirrors.get("npm_registry", "")
+    if npm_registry:
+        success, _ = run_command(f"npm install -g pm2 --registry={npm_registry}")
+    else:
+        success, _ = run_command("npm install -g pm2")
     return success
 
 
@@ -475,6 +487,7 @@ networks:
     # 拉取镜像：直接用流式模式，实时显示进度
     log("拉取Docker镜像（实时进度）...")
     install_status["message"] = "拉取 Docker 镜像中..."
+    install_status["current_stage"] = "docker_pull"
     pull_ok, _ = run_command_stream(
         "docker compose -f astrbot.yml pull",
         cwd=astrbot_dir, generation=install_generation
@@ -509,11 +522,20 @@ def deploy_sillytavern():
     if not os.path.exists(tavern_dir):
         log("克隆 SillyTavern 仓库...")
         install_status["message"] = "克隆 SillyTavern 仓库..."
+        install_status["current_stage"] = "git_clone"
+        git_proxy = runtime_mirrors.get("git_proxy", "")
+        if git_proxy:
+            clone_url = f"{git_proxy}https://github.com/SillyTavern/SillyTavern.git"
+            log(f"使用代理: {git_proxy}")
+        else:
+            clone_url = "https://github.com/SillyTavern/SillyTavern.git"
         success, _ = run_command_stream(
-            f"git clone --depth 1 --progress https://gh.llkk.cc/https://github.com/SillyTavern/SillyTavern.git {tavern_dir}",
+            f"git clone --depth 1 --progress {clone_url} {tavern_dir}",
             generation=install_generation
         )
-        if not success:
+        if not success and git_proxy:
+            log("代理克隆失败，尝试直连 GitHub...")
+            run_command(f"rm -rf {tavern_dir}")
             success, _ = run_command_stream(
                 f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}",
                 generation=install_generation
@@ -527,16 +549,27 @@ def deploy_sillytavern():
         return False
     log("安装npm依赖...")
     install_status["message"] = "安装 npm 依赖（可能需要几分钟）..."
+    install_status["current_stage"] = "npm_install"
     install_success = False
-    # 使用淘宝镜像加速，用 --progress 显示进度
-    npm_cmd = "npm install --no-audit --no-fund --registry=https://registry.npmmirror.com"
+    npm_registry = runtime_mirrors.get("npm_registry", "")
+    if npm_registry:
+        npm_cmd = f"npm install --no-audit --no-fund --registry={npm_registry}"
+        log(f"使用npm镜像: {npm_registry}")
+    else:
+        npm_cmd = "npm install --no-audit --no-fund"
     for attempt in range(3):
         if attempt > 0:
             log(f"npm install 重试第 {attempt} 次...")
             run_command("rm -rf node_modules", cwd=tavern_dir)
             run_command("npm cache clean --force", cwd=tavern_dir)
-        success, _ = run_command_stream(npm_cmd, cwd=tavern_dir, generation=install_generation)
+        success, output = run_command_stream(npm_cmd, cwd=tavern_dir, generation=install_generation, timeout=900)
+        # 即使返回码非0，也检查 node_modules 是否实际存在
+        node_modules = os.path.join(tavern_dir, "node_modules")
         if success:
+            install_success = True
+            break
+        elif os.path.exists(node_modules) and len(os.listdir(node_modules)) > 10:
+            log("npm 返回码非0，但 node_modules 已存在（可能是 warning 导致），视为成功")
             install_success = True
             break
     if not install_success:
@@ -564,8 +597,8 @@ browserLaunch:
 port: {config['tavern_port']}
 whitelistMode: false
 basicAuthMode: false
-enableUserAccounts: false
-enableDiscreetLogin: true
+enableUserAccounts: true
+enableDiscreetLogin: false
 sessionTimeout: 86400
 securityOverride: true
 disableCsrfProtection: false
@@ -595,18 +628,18 @@ disableCsrfProtection: false
 
 
 def set_sillytavern_password(tavern_dir):
-    """为 SillyTavern 的 default-user 设置初始密码"""
+    """为 SillyTavern 设置用户指定的用户名和密码"""
     import glob
     storage_dir = os.path.join(tavern_dir, "data", "_storage")
     
     # 等待存储目录创建
-    for _ in range(10):
+    for _ in range(15):
         if os.path.exists(storage_dir):
             break
         time.sleep(1)
     
     if not os.path.exists(storage_dir):
-        log("SillyTavern 存储目录未创建，跳过密码设置")
+        log("SillyTavern 存储目录未创建，跳过账号设置")
         return
     
     # 查找 default-user 的存储文件
@@ -623,11 +656,15 @@ def set_sillytavern_password(tavern_dir):
             continue
     
     if not target_file:
-        log("未找到 default-user 存储文件，跳过密码设置")
+        log("未找到 default-user 存储文件，跳过账号设置")
         return
     
-    # 生成随机密码
-    password = secrets.token_urlsafe(12)  # 16字符的安全密码
+    # 获取用户设置的用户名和密码
+    username = config.get("tavern_username", "admin")
+    password = config.get("tavern_password", "")
+    if not password:
+        password = secrets.token_urlsafe(12)
+        log(f"未设置密码，自动生成: {password}")
     
     # 生成 salt 和 hash（与 SillyTavern 的 scrypt 算法兼容）
     salt = base64.b64encode(os.urandom(16)).decode('utf-8')
@@ -643,18 +680,31 @@ def set_sillytavern_password(tavern_dir):
         with open(target_file, "r", encoding="utf-8") as fp:
             data = json.load(fp)
         
+        # 设置密码
         data["value"]["password"] = password_hash_b64
         data["value"]["salt"] = salt
+        # 修改用户名（key 和 name 都改）
+        data["key"] = f"user:{username}"
+        data["value"]["name"] = username
+        # 确保是管理员且启用
+        data["value"]["admin"] = True
+        data["value"]["enabled"] = True
         
         with open(target_file, "w", encoding="utf-8") as fp:
             json.dump(data, fp, ensure_ascii=False)
         
-        # 保存密码到配置
+        # 保存到配置
+        config["tavern_username"] = username
         config["tavern_password"] = password
         save_config()
-        log(f"SillyTavern 初始密码已设置: {password}")
+        log(f"SillyTavern 账号已设置 - 用户名: {username}")
+        
+        # 重启酒馆使改动生效
+        log("重启 SillyTavern 以应用账号设置...")
+        run_command("pm2 restart sillytavern", quiet=True)
+        time.sleep(3)
     except Exception as e:
-        log(f"设置 SillyTavern 密码失败: {e}")
+        log(f"设置 SillyTavern 账号失败: {e}")
 
 
 def install_astrbot_plugins(selected_plugins):
@@ -863,6 +913,7 @@ def do_install(generation):
             "napcat_token": napcat_token,
             "astrbot_url": f"http://{server_ip}:{config['astrbot_port']}",
             "tavern_url": f"http://{server_ip}:{config['tavern_port']}",
+            "tavern_username": config.get("tavern_username", "admin"),
             "tavern_password": config.get("tavern_password", "")
         }
 
@@ -1111,7 +1162,8 @@ def api_service_reinstall(name):
         "progress": 0,
         "message": f"重装 {name}...",
         "logs": [],
-        "results": {}
+        "results": {},
+        "current_stage": ""
     }
     
     def do_reinstall():
@@ -1237,6 +1289,287 @@ def set_docker_mirror():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/mirrors/set", methods=["POST"])
+@login_required
+def set_mirrors():
+    """统一切换镜像（npm/git/docker）"""
+    global runtime_mirrors
+    data = request.json or {}
+    mirror_type = data.get("type", "")  # npm, git, docker
+    mirror_value = data.get("value", "")
+    if mirror_type == "npm":
+        npm_map = {
+            "taobao": "https://registry.npmmirror.com",
+            "tencent": "https://mirrors.cloud.tencent.com/npm/",
+            "direct": ""
+        }
+        runtime_mirrors["npm_registry"] = npm_map.get(mirror_value, mirror_value)
+        msg = f"npm 源已切换为: {runtime_mirrors['npm_registry'] or '官方源'}"
+        log(msg)
+        return jsonify({"success": True, "message": msg})
+    elif mirror_type == "git":
+        git_map = {
+            "ghproxy": "https://gh.llkk.cc/",
+            "gitclone": "https://gitclone.com/github.com/",
+            "direct": ""
+        }
+        runtime_mirrors["git_proxy"] = git_map.get(mirror_value, mirror_value)
+        msg = f"Git 代理已切换为: {runtime_mirrors['git_proxy'] or '直连 GitHub'}"
+        log(msg)
+        return jsonify({"success": True, "message": msg})
+    elif mirror_type == "docker":
+        # 复用已有的 Docker 镜像切换逻辑
+        return set_docker_mirror_internal(mirror_value)
+    return jsonify({"success": False, "error": "未知镜像类型"}), 400
+
+
+def set_docker_mirror_internal(mirror):
+    """Docker 镜像切换内部实现"""
+    daemon_json = "/etc/docker/daemon.json"
+    try:
+        if mirror == "direct":
+            if os.path.exists(daemon_json):
+                os.remove(daemon_json)
+            run_command("systemctl daemon-reload", quiet=True)
+            run_command("systemctl restart docker", quiet=True)
+            time.sleep(3)
+            return jsonify({"success": True, "message": "已切换为直连 Docker Hub"})
+        mirrors_map = {
+            "1panel": ["https://docker.1panel.live"],
+            "daocloud": ["https://docker.m.daocloud.io"],
+            "aliyun": ["https://docker.mirrors.ustc.edu.cn", "https://hub-mirror.c.163.com"]
+        }
+        mirrors = mirrors_map.get(mirror, mirrors_map["1panel"])
+        mirror_config = json.dumps({"registry-mirrors": mirrors}, indent=2)
+        with open(daemon_json, "w") as f:
+            f.write(mirror_config)
+        run_command("systemctl daemon-reload", quiet=True)
+        run_command("systemctl restart docker", quiet=True)
+        time.sleep(3)
+        return jsonify({"success": True, "message": f"已配置 {mirror} 镜像"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/install/retry-stage", methods=["POST"])
+@login_required
+def retry_current_stage():
+    """仅重试当前失败的安装阶段，不重启整个安装流程"""
+    global install_status, install_generation
+    current_stage = install_status.get("current_stage", "")
+    if not current_stage:
+        return jsonify({"success": False, "error": "无可重试的阶段"}), 400
+
+    install_generation += 1
+    current_gen = install_generation
+    # 保留之前的日志，不清空
+    old_logs = list(install_status.get("logs", []))
+    install_status["stage"] = "installing"
+    install_status["logs"] = old_logs
+    install_status["logs"].append(f"[{time.strftime('%H:%M:%S')}] === 重试阶段: {current_stage} ===")
+
+    def do_retry():
+        global install_status
+        try:
+            if current_stage == "docker_pull":
+                install_status["message"] = "重试拉取 Docker 镜像..."
+                install_status["current_stage"] = "docker_pull"
+                astrbot_dir = "/opt/astrbot"
+                pull_ok, _ = run_command_stream(
+                    "docker compose -f astrbot.yml pull",
+                    cwd=astrbot_dir, generation=current_gen
+                )
+                if not pull_ok:
+                    pull_ok, _ = run_command_stream(
+                        "docker-compose -f astrbot.yml pull",
+                        cwd=astrbot_dir, generation=current_gen
+                    )
+                if not pull_ok:
+                    raise Exception("Docker镜像拉取失败")
+                # 继续完成后续步骤
+                log("镜像拉取成功，继续启动容器...")
+                install_status["message"] = "启动 Docker 容器..."
+                success, _ = run_command("docker compose -f astrbot.yml up -d", cwd=astrbot_dir)
+                if not success:
+                    success, _ = run_command("docker-compose -f astrbot.yml up -d", cwd=astrbot_dir)
+                if not success:
+                    raise Exception("Docker容器启动失败")
+                # 继续剩余安装流程
+                _continue_install_after_docker(current_gen)
+
+            elif current_stage == "git_clone":
+                install_status["message"] = "重试克隆 SillyTavern..."
+                install_status["current_stage"] = "git_clone"
+                tavern_dir = "/opt/sillytavern"
+                run_command(f"rm -rf {tavern_dir}")
+                if not deploy_sillytavern():
+                    raise Exception("SillyTavern部署失败")
+                _finish_install(current_gen)
+
+            elif current_stage == "npm_install":
+                install_status["message"] = "重试安装 npm 依赖..."
+                install_status["current_stage"] = "npm_install"
+                tavern_dir = "/opt/sillytavern"
+                # 清理旧 node_modules
+                run_command("rm -rf node_modules", cwd=tavern_dir)
+                run_command("npm cache clean --force", cwd=tavern_dir)
+                npm_registry = runtime_mirrors.get("npm_registry", "")
+                if npm_registry:
+                    npm_cmd = f"npm install --no-audit --no-fund --registry={npm_registry}"
+                    log(f"使用npm镜像: {npm_registry}")
+                else:
+                    npm_cmd = "npm install --no-audit --no-fund"
+                success, _ = run_command_stream(npm_cmd, cwd=tavern_dir, generation=current_gen, timeout=900)
+                node_modules = os.path.join(tavern_dir, "node_modules")
+                if not success and os.path.exists(node_modules) and len(os.listdir(node_modules)) > 10:
+                    log("npm 返回码非0，但 node_modules 已存在，视为成功")
+                    success = True
+                if not success:
+                    raise Exception("npm依赖安装失败")
+                # npm成功后继续剩余 SillyTavern 配置
+                log("npm 依赖安装成功，继续配置...")
+                _continue_sillytavern_config(tavern_dir)
+                _finish_install(current_gen)
+            else:
+                raise Exception(f"不支持重试的阶段: {current_stage}")
+        except Exception as e:
+            install_status["stage"] = "error"
+            install_status["message"] = str(e)
+            log(f"重试失败: {str(e)}")
+
+    thread = threading.Thread(target=do_retry, daemon=True)
+    thread.start()
+    return jsonify({"success": True, "stage": current_stage})
+
+
+def _continue_sillytavern_config(tavern_dir):
+    """SillyTavern npm安装后的配置步骤"""
+    log("配置SillyTavern...")
+    config_content = f"""dataRoot: ./data
+listen: true
+listenAddress:
+  ipv4: 0.0.0.0
+  ipv6: '[::]'
+protocol:
+  ipv4: true
+  ipv6: false
+dnsPreferIPv6: false
+browserLaunch:
+  enabled: false
+  browser: 'default'
+  hostname: 'auto'
+  port: -1
+  avoidLocalhost: false
+port: {config['tavern_port']}
+whitelistMode: false
+basicAuthMode: false
+enableUserAccounts: true
+enableDiscreetLogin: false
+sessionTimeout: 86400
+securityOverride: true
+disableCsrfProtection: false
+"""
+    config_path = os.path.join(tavern_dir, "config.yaml")
+    with open(config_path, "w") as f:
+        f.write(config_content)
+    log(f"config.yaml 已写入（端口:{config['tavern_port']}, securityOverride:true）")
+    log("使用PM2启动SillyTavern...")
+    run_command("pm2 delete sillytavern 2>/dev/null || true")
+    success, _ = run_command(
+        'pm2 start server.js --name "sillytavern"',
+        cwd=tavern_dir
+    )
+    if success:
+        run_command("pm2 save", quiet=True)
+        run_command("pm2 startup 2>/dev/null || true", quiet=True)
+        time.sleep(5)
+        alive, status_output = run_command("pm2 show sillytavern")
+        if alive and "online" in status_output.lower():
+            log(f"SillyTavern 已在端口 {config['tavern_port']} 成功启动")
+            set_sillytavern_password(tavern_dir)
+        else:
+            log("SillyTavern 可能未正常启动，请检查 pm2 logs sillytavern")
+
+
+def _continue_install_after_docker(generation):
+    """Docker部署完成后，继续剩余安装步骤"""
+    if generation != install_generation:
+        return
+    # 获取 NapCat token
+    install_status["progress"] = 55
+    install_status["message"] = "获取 NapCat 登录 Token..."
+    log("等待NapCat容器初始化...")
+    napcat_token = ""
+    for _ in range(10):
+        time.sleep(3)
+        napcat_token = get_napcat_token()
+        if napcat_token:
+            log(f"NapCat WebUI Token: {napcat_token}")
+            break
+    config["napcat_token"] = napcat_token
+    if config.get("install_plugins", False):
+        install_status["progress"] = 60
+        install_status["message"] = "安装 AstrBot 插件..."
+        install_astrbot_plugins(ASTRBOT_PLUGINS)
+    # 继续 SillyTavern
+    if generation != install_generation:
+        return
+    if config.get("install_tavern", True):
+        install_status["progress"] = 65
+        install_status["message"] = "部署 SillyTavern..."
+        if not deploy_sillytavern():
+            raise Exception("SillyTavern部署失败")
+    _finish_install(generation)
+
+
+def _finish_install(generation):
+    """完成安装收尾步骤"""
+    if generation != install_generation:
+        return
+    install_status["progress"] = 92
+    install_status["message"] = "配置防火墙..."
+    configure_firewall()
+    install_status["progress"] = 95
+    install_status["message"] = "保存配置..."
+    server_ip = ""
+    ok, ip_out = run_command("hostname -I | awk '{print $1}'", quiet=True)
+    if ok and ip_out.strip():
+        server_ip = ip_out.strip()
+    if not server_ip:
+        server_ip = "你的服务器IP"
+    config["server_ip"] = server_ip
+    config["installed"] = True
+    save_config()
+    napcat_base = f"http://{server_ip}:{config['napcat_port']}"
+    napcat_token = config.get("napcat_token", "")
+    napcat_url = f"{napcat_base}/webui?token={napcat_token}" if napcat_token else napcat_base
+    install_status["results"] = {
+        "server_ip": server_ip,
+        "napcat_url": napcat_url,
+        "napcat_token": napcat_token,
+        "astrbot_url": f"http://{server_ip}:{config['astrbot_port']}",
+        "tavern_url": f"http://{server_ip}:{config['tavern_port']}",
+        "tavern_username": config.get("tavern_username", "admin"),
+        "tavern_password": config.get("tavern_password", "")
+    }
+    install_status["progress"] = 98
+    install_status["message"] = "注册常驻服务..."
+    log("注册夜鹭机管理面板为常驻服务...")
+    run_command("pm2 delete yolushiki 2>/dev/null || true", quiet=True)
+    yolushiki_app = os.path.join(CONFIG_DIR, "app.py")
+    if os.path.exists(yolushiki_app):
+        run_command(
+            f'pm2 start {yolushiki_app} --name "yolushiki" --interpreter python3 -- --port 9999 --host 0.0.0.0',
+            quiet=True
+        )
+        run_command("pm2 save", quiet=True)
+    install_status["progress"] = 100
+    install_status["message"] = "安装完成！"
+    install_status["stage"] = "completed"
+    install_status["current_stage"] = ""
+    log("夜鹭机安装完成！")
+
+
 @app.route("/api/install", methods=["POST"])
 @login_required
 def start_install():
@@ -1250,7 +1583,8 @@ def start_install():
         "progress": 0,
         "message": "开始安装...",
         "logs": [],
-        "results": {}
+        "results": {},
+        "current_stage": ""
     }
     data = request.json or {}
     config["install_tavern"] = data.get("install_tavern", True)
@@ -1262,6 +1596,11 @@ def start_install():
     if "selected_plugins" in data:
         for i, plugin in enumerate(ASTRBOT_PLUGINS):
             plugin["selected"] = i in data["selected_plugins"]
+    # 酒馆用户名密码
+    if data.get("tavern_username"):
+        config["tavern_username"] = data["tavern_username"]
+    if data.get("tavern_password"):
+        config["tavern_password"] = data["tavern_password"]
     save_config()
     thread = threading.Thread(target=do_install, args=(current_gen,), daemon=True)
     thread.start()
