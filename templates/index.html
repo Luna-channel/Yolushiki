@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>夜鹭机 - 管理面板</title>
+    <link rel="icon" href="/static/logo.ico" type="image/x-icon">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
         :root {
@@ -639,6 +640,129 @@
             background: rgba(212,160,23,0.15);
             color: var(--accent-yellow);
         }
+
+        /* ===== 百科侧边栏 ===== */
+        .ency-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.35);
+            z-index: 2500;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .ency-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .ency-sidebar {
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            width: 380px;
+            max-width: 90vw;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            z-index: 2600;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+        }
+        .ency-sidebar.open { transform: translateX(0); }
+        .ency-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .ency-header h2 {
+            margin: 0; font-size: 1.1rem; color: #fff;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .ency-close {
+            background: none; border: none; color: var(--text-secondary);
+            cursor: pointer; padding: 6px; border-radius: 6px; font-size: 1.2rem;
+        }
+        .ency-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+        .ency-back {
+            background: none; border: none; color: var(--accent-blue-light);
+            cursor: pointer; padding: 6px 10px; border-radius: 6px; font-size: 0.85rem;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .ency-back:hover { background: rgba(74,142,207,0.15); }
+        .ency-search {
+            padding: 12px 20px; flex-shrink: 0;
+        }
+        .ency-search input {
+            width: 100%; padding: 10px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            border-radius: 8px; color: #fff; font-size: 0.85rem;
+            outline: none;
+        }
+        .ency-search input:focus { border-color: var(--accent-blue-light); }
+        .ency-search input::placeholder { color: var(--text-secondary); }
+        .ency-cats {
+            display: flex; gap: 6px; padding: 0 20px 12px;
+            flex-wrap: wrap; flex-shrink: 0;
+        }
+        .ency-cat {
+            padding: 4px 12px; border-radius: 20px; font-size: 0.75rem;
+            background: rgba(255,255,255,0.06); color: var(--text-secondary);
+            border: 1px solid transparent; cursor: pointer; transition: all 0.2s;
+        }
+        .ency-cat:hover { background: rgba(74,142,207,0.1); color: var(--accent-blue-light); }
+        .ency-cat.active {
+            background: rgba(74,142,207,0.15); color: var(--accent-blue-light);
+            border-color: var(--accent-blue-light);
+        }
+        .ency-list {
+            flex: 1; overflow-y: auto; padding: 0 12px 12px;
+        }
+        .ency-item {
+            padding: 12px 14px; margin-bottom: 4px;
+            border-radius: 8px; cursor: pointer; transition: background 0.15s;
+        }
+        .ency-item:hover { background: rgba(255,255,255,0.05); }
+        .ency-item-title {
+            color: #fff; font-size: 0.9rem; font-weight: 500; margin-bottom: 3px;
+        }
+        .ency-item-brief {
+            color: var(--text-secondary); font-size: 0.78rem; line-height: 1.4;
+        }
+        .ency-item-cat {
+            display: inline-block; font-size: 0.65rem; padding: 1px 8px;
+            border-radius: 10px; background: rgba(74,142,207,0.12);
+            color: var(--accent-blue-light); margin-bottom: 4px;
+        }
+        .ency-detail {
+            flex: 1; overflow-y: auto; padding: 20px;
+            display: none;
+        }
+        .ency-detail.active { display: block; }
+        .ency-detail-title {
+            color: #fff; font-size: 1.15rem; font-weight: 600; margin-bottom: 6px;
+        }
+        .ency-detail-cat {
+            display: inline-block; font-size: 0.7rem; padding: 2px 10px;
+            border-radius: 10px; background: rgba(74,142,207,0.12);
+            color: var(--accent-blue-light); margin-bottom: 14px;
+        }
+        .ency-detail-text {
+            color: var(--text-secondary); font-size: 0.85rem; line-height: 1.75;
+            white-space: pre-line;
+        }
+        .ency-detail-text code {
+            background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;
+            font-family: monospace; font-size: 0.8rem; color: var(--accent-blue-light);
+        }
+        .ency-empty {
+            text-align: center; padding: 40px 20px; color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -744,6 +868,18 @@
                 </div>
             </div>
 
+            <!-- F6: 端口放行提示 -->
+            <div class="card" style="background:rgba(212,160,23,0.08);border-color:rgba(212,160,23,0.3);">
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                    <i data-lucide="shield-alert" style="color:var(--accent-yellow);flex-shrink:0;margin-top:2px;"></i>
+                    <div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.5;">
+                        <strong style="color:var(--accent-yellow);">安装前请确认：</strong>您的云服务器（腾讯云/阿里云/华为云等）安全组是否已放行以下端口？<br>
+                        <span style="color:var(--text-primary);">6099、6185、18888（或您自定义的端口）、9999</span><br>
+                        如未放行，安装完成后将无法在浏览器中打开各服务。请在云服务商控制台的<strong>安全组/防火墙</strong>中添加入站规则。
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <button class="btn btn-primary" id="install-btn" onclick="startInstall()">
                     <i data-lucide="rocket"></i> 开始安装
@@ -834,6 +970,7 @@
                         <span class="dot"></span> 检测中...
                     </div>
                     <div class="svc-resource" id="res-napcat">--</div>
+                    <div id="napcat-error-hint" style="display:none;font-size:0.72rem;color:var(--accent-yellow);margin-top:6px;line-height:1.3;"></div>
                     <div class="svc-actions">
                         <button class="svc-btn open-btn" onclick="openNapCat()">
                             <i data-lucide="external-link"></i> 打开
@@ -937,6 +1074,11 @@
                         <span class="ql-text">SillyTavern 使用指南</span>
                         <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
                     </a>
+                    <div class="quick-link" onclick="openEncyclopedia()" style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px;">
+                        <i data-lucide="book-open"></i>
+                        <span class="ql-text">百科全书 — 不懂的概念点这里查</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </div>
                 </div>
             </div>
 
@@ -947,6 +1089,30 @@
                     <div class="quick-link" onclick="showChangeToken()">
                         <i data-lucide="refresh-cw"></i>
                         <span class="ql-text">修改管理面板访问令牌</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 错误报告 -->
+            <div class="card">
+                <h2><i data-lucide="bug"></i> 故障排查</h2>
+                <div class="quick-links">
+                    <div class="quick-link" onclick="generateErrorReport()">
+                        <i data-lucide="clipboard-list"></i>
+                        <span class="ql-text">一键生成错误报告（复制后发给开发者或AI排查）</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 卸载/清理 -->
+            <div class="card">
+                <h2><i data-lucide="trash-2"></i> 卸载 / 清理</h2>
+                <div class="quick-links">
+                    <div class="quick-link" onclick="showUninstallDialog()" style="color:var(--accent-red);">
+                        <i data-lucide="alert-triangle"></i>
+                        <span class="ql-text">卸载夜鹭机相关服务和数据</span>
                         <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
                     </div>
                 </div>
@@ -990,6 +1156,19 @@
         </div>
     </div>
 
+    <!-- ===== 错误报告弹窗 ===== -->
+    <div class="modal-overlay hidden" id="report-modal">
+        <div class="modal" style="max-width:640px;">
+            <h2><i data-lucide="clipboard-list"></i> 错误报告</h2>
+            <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">点击下方按钮复制报告内容，发给开发者或粘贴给AI帮你排查问题。</p>
+            <div class="logs-content" id="report-content" style="max-height:350px;font-size:0.75rem;color:var(--text-primary);white-space:pre-wrap;">生成中...</div>
+            <div class="modal-btns" style="margin-top:12px;">
+                <button class="btn btn-primary" onclick="copyErrorReport()" id="copy-report-btn"><i data-lucide="copy"></i> 一键复制</button>
+                <button class="btn btn-secondary" onclick="hideReportModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== 自定义弹窗 ===== -->
     <div class="dialog-overlay" id="dialog-overlay">
         <div class="dialog-box">
@@ -999,6 +1178,91 @@
             <div class="dialog-title" id="dialog-title">提示</div>
             <div class="dialog-message" id="dialog-message"></div>
             <div class="dialog-btns" id="dialog-btns"></div>
+        </div>
+    </div>
+
+    <!-- ===== M1: 安装完成引导弹窗 ===== -->
+    <div class="dialog-overlay" id="guide-overlay" style="display:none;">
+        <div class="dialog-box" style="max-width:480px;">
+            <div class="dialog-title" style="color:var(--accent-green);">
+                <i data-lucide="party-popper" style="width:20px;height:20px;"></i> 安装完成！
+            </div>
+            <div style="text-align:left;margin:16px 0;line-height:1.8;font-size:0.9rem;">
+                <div style="margin-bottom:14px;color:var(--text-secondary);">接下来请按顺序完成以下配置：</div>
+                <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;">
+                    <span style="background:var(--accent-blue);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.8rem;font-weight:bold;">1</span>
+                    <div><strong style="color:#fff;">去 NapCat 扫码登录 QQ</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">点击仪表盘中 NapCat 的"打开"按钮，用手机 QQ 扫码</span></div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;">
+                    <span style="background:var(--accent-blue);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.8rem;font-weight:bold;">2</span>
+                    <div><strong style="color:#fff;">配置 AstrBot 的 AI 模型</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">打开 AstrBot 管理面板，设置你的 AI 接口密钥</span></div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;">
+                    <span style="background:var(--accent-blue);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.8rem;font-weight:bold;">3</span>
+                    <div><strong style="color:#fff;">打开云酒馆开始使用</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">用安装时设置的账号密码登录 SillyTavern</span></div>
+                </div>
+                <div style="margin-top:10px;padding:10px 14px;background:rgba(212,160,23,0.1);border-radius:8px;font-size:0.78rem;color:var(--accent-yellow);">
+                    💡 每个服务都有详细教程，点击仪表盘下方的"配置教程"链接即可查看
+                </div>
+            </div>
+            <div class="dialog-btns">
+                <button class="btn btn-primary" onclick="hideGuide()">我知道了，开始配置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 百科侧边栏 ===== -->
+    <div class="ency-overlay" id="ency-overlay" onclick="closeEncyclopedia()"></div>
+    <div class="ency-sidebar" id="ency-sidebar">
+        <div class="ency-header" id="ency-header-list">
+            <h2><i data-lucide="book-open"></i> 百科全书</h2>
+            <button class="ency-close" onclick="closeEncyclopedia()">&times;</button>
+        </div>
+        <div class="ency-header" id="ency-header-detail" style="display:none;">
+            <button class="ency-back" onclick="encyBackToList()"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> 返回列表</button>
+            <button class="ency-close" onclick="closeEncyclopedia()">&times;</button>
+        </div>
+        <div id="ency-list-view">
+            <div class="ency-search">
+                <input type="text" id="ency-search-input" placeholder="搜索术语、问题..." oninput="encyFilter()">
+            </div>
+            <div class="ency-cats" id="ency-cats"></div>
+            <div class="ency-list" id="ency-list"></div>
+        </div>
+        <div class="ency-detail" id="ency-detail-view">
+            <div class="ency-detail-cat" id="ency-detail-cat"></div>
+            <div class="ency-detail-title" id="ency-detail-title"></div>
+            <div class="ency-detail-text" id="ency-detail-text"></div>
+        </div>
+    </div>
+
+    <!-- ===== 卸载弹窗 ===== -->
+    <div class="modal-overlay hidden" id="uninstall-modal">
+        <div class="modal" style="max-width:520px;">
+            <h2 style="color:var(--accent-red);"><i data-lucide="trash-2"></i> 卸载 / 清理</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">选择要清理的内容。勾选的项目将被删除，请谨慎操作。</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;cursor:pointer;">
+                    <input type="checkbox" id="uninst-containers" checked> <span style="color:#fff;font-size:0.9rem;">停止并删除 Docker 容器（AstrBot + NapCat）</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;cursor:pointer;">
+                    <input type="checkbox" id="uninst-images"> <span style="color:#fff;font-size:0.9rem;">删除 Docker 镜像（释放磁盘空间）</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;cursor:pointer;">
+                    <input type="checkbox" id="uninst-tavern" checked> <span style="color:#fff;font-size:0.9rem;">停止 SillyTavern</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:8px;cursor:pointer;">
+                    <input type="checkbox" id="uninst-data"> <span style="color:var(--accent-red);font-size:0.9rem;">⚠ 删除所有数据（聊天记录、配置、角色卡等不可恢复！）</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:8px;cursor:pointer;">
+                    <input type="checkbox" id="uninst-deps"> <span style="color:var(--accent-red);font-size:0.9rem;">⚠ 卸载 PM2（Docker/Node.js 需手动卸载）</span>
+                </label>
+            </div>
+            <div id="uninstall-result" style="display:none;margin-top:14px;padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;font-size:0.82rem;color:var(--text-secondary);white-space:pre-line;"></div>
+            <div class="modal-btns" style="margin-top:16px;">
+                <button class="btn btn-secondary" onclick="hideUninstallDialog()">取消</button>
+                <button class="btn" id="uninst-btn" style="background:var(--accent-red);color:#fff;" onclick="doUninstall()">确认卸载</button>
+            </div>
         </div>
     </div>
 
@@ -1029,7 +1293,7 @@
 
     <!-- ===== 底部栏 ===== -->
     <div class="footer">
-        <p>夜鹭机 v0.2 · Build by <a href="https://github.com/Luna-channel" target="_blank">@Luna_Dol</a></p>
+        <p>夜鹭机 v{{ version }} · Build by <a href="https://github.com/Luna-channel" target="_blank">@Luna_Dol</a></p>
     </div>
 
     <script>
@@ -1442,7 +1706,10 @@
                         clearInterval(installInterval);
                         mirrorPanel.classList.add('hidden');
                         document.getElementById('error-panel').classList.add('hidden');
-                        setTimeout(() => showDashboard(), 1500);
+                        setTimeout(() => {
+                            showDashboard();
+                            showPostInstallGuide();
+                        }, 1500);
                     } else if (data.stage === 'error') {
                         clearInterval(installInterval);
                         document.getElementById('error-panel').classList.remove('hidden');
@@ -1523,6 +1790,20 @@
 
             statusEl.className = 'svc-status ' + statusClass;
             statusEl.innerHTML = '<span class="dot"></span> ' + statusText;
+
+            // M5: NapCat 连接错误提示
+            if (name === 'napcat' && info.last_error) {
+                statusEl.innerHTML += ' <span style="color:var(--accent-yellow);font-size:0.7rem;margin-left:4px;" title="' +
+                    info.last_error.replace(/"/g, '&quot;') + '">⚠ 异常</span>';
+                const errDiv = document.getElementById('napcat-error-hint');
+                if (errDiv) {
+                    errDiv.style.display = 'block';
+                    errDiv.textContent = '⚠ ' + (info.error_hint || '检测到异常，建议重启后重新登录');
+                }
+            } else if (name === 'napcat') {
+                const errDiv = document.getElementById('napcat-error-hint');
+                if (errDiv) errDiv.style.display = 'none';
+            }
 
             // 资源占用
             if (info.memory > 0) {
@@ -1738,6 +2019,15 @@
             document.getElementById('logs-modal').classList.add('hidden');
         }
 
+        // ===== M1: 安装完成引导 =====
+        function showPostInstallGuide() {
+            document.getElementById('guide-overlay').style.display = 'flex';
+            lucide.createIcons();
+        }
+        function hideGuide() {
+            document.getElementById('guide-overlay').style.display = 'none';
+        }
+
         // ===== 关闭夜鹭机 =====
         async function confirmShutdown() {
             const confirmed = await showDialog({
@@ -1754,10 +2044,226 @@
         }
 
         async function doShutdown() {
-            await fetch('/api/auth/logout', { method: 'POST' });
-            // 显示关闭界面
+            await fetch('/api/system/shutdown', { method: 'POST' });
             document.getElementById('shutdown-screen').style.display = 'flex';
             lucide.createIcons();
+        }
+
+        // ===== 百科侧边栏 =====
+        let _encyData = null;
+        let _encyActiveCat = '';
+
+        async function openEncyclopedia() {
+            document.getElementById('ency-overlay').classList.add('active');
+            document.getElementById('ency-sidebar').classList.add('open');
+            if (!_encyData) {
+                try {
+                    const resp = await fetch('/static/encyclopedia.json');
+                    _encyData = await resp.json();
+                } catch(e) {
+                    document.getElementById('ency-list').innerHTML = '<div class="ency-empty">加载失败，请刷新重试</div>';
+                    return;
+                }
+                const catsEl = document.getElementById('ency-cats');
+                const cats = _encyData.categories || [];
+                catsEl.innerHTML = '<span class="ency-cat active" onclick="encySetCat(\'\')">全部</span>' +
+                    cats.map(c => `<span class="ency-cat" onclick="encySetCat('${c}')">${c}</span>`).join('');
+            }
+            encyBackToList();
+            encyFilter();
+            lucide.createIcons();
+        }
+
+        function closeEncyclopedia() {
+            document.getElementById('ency-overlay').classList.remove('active');
+            document.getElementById('ency-sidebar').classList.remove('open');
+        }
+
+        function encySetCat(cat) {
+            _encyActiveCat = cat;
+            document.querySelectorAll('.ency-cat').forEach(el => {
+                el.classList.toggle('active', (cat === '' && el.textContent === '全部') || el.textContent === cat);
+            });
+            encyFilter();
+        }
+
+        function encyFilter() {
+            if (!_encyData) return;
+            const q = (document.getElementById('ency-search-input').value || '').toLowerCase();
+            const listEl = document.getElementById('ency-list');
+            const filtered = _encyData.terms.filter(t => {
+                if (_encyActiveCat && t.category !== _encyActiveCat) return false;
+                if (q && !t.term.toLowerCase().includes(q) && !t.brief.toLowerCase().includes(q) && !(t.detail||'').toLowerCase().includes(q)) return false;
+                return true;
+            });
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<div class="ency-empty">没有找到匹配的条目</div>';
+                return;
+            }
+            listEl.innerHTML = filtered.map(t => `
+                <div class="ency-item" onclick="encyShowDetail('${t.id}')">
+                    <span class="ency-item-cat">${t.category}</span>
+                    <div class="ency-item-title">${t.term}</div>
+                    <div class="ency-item-brief">${t.brief}</div>
+                </div>
+            `).join('');
+        }
+
+        function encyShowDetail(id) {
+            if (!_encyData) return;
+            const t = _encyData.terms.find(x => x.id === id);
+            if (!t) return;
+            document.getElementById('ency-detail-cat').textContent = t.category;
+            document.getElementById('ency-detail-title').textContent = t.term;
+            document.getElementById('ency-detail-text').innerHTML = (t.detail || '').replace(/\n/g, '<br>');
+            document.getElementById('ency-list-view').style.display = 'none';
+            document.getElementById('ency-header-list').style.display = 'none';
+            document.getElementById('ency-header-detail').style.display = 'flex';
+            document.getElementById('ency-detail-view').classList.add('active');
+            lucide.createIcons();
+        }
+
+        function encyBackToList() {
+            document.getElementById('ency-list-view').style.display = '';
+            document.getElementById('ency-header-list').style.display = 'flex';
+            document.getElementById('ency-header-detail').style.display = 'none';
+            document.getElementById('ency-detail-view').classList.remove('active');
+        }
+
+        // ===== 卸载/清理 =====
+        function showUninstallDialog() {
+            document.getElementById('uninstall-modal').classList.remove('hidden');
+            document.getElementById('uninstall-result').style.display = 'none';
+            document.getElementById('uninst-btn').disabled = false;
+            document.getElementById('uninst-btn').textContent = '确认卸载';
+            lucide.createIcons();
+        }
+        function hideUninstallDialog() {
+            document.getElementById('uninstall-modal').classList.add('hidden');
+        }
+        async function doUninstall() {
+            const btn = document.getElementById('uninst-btn');
+            btn.disabled = true;
+            btn.textContent = '正在卸载...';
+            const body = {
+                remove_containers: document.getElementById('uninst-containers').checked,
+                remove_images: document.getElementById('uninst-images').checked,
+                remove_sillytavern: document.getElementById('uninst-tavern').checked,
+                remove_data: document.getElementById('uninst-data').checked,
+                remove_dependencies: document.getElementById('uninst-deps').checked
+            };
+            try {
+                const resp = await fetch('/api/system/uninstall', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                const r = await resp.json();
+                const resultEl = document.getElementById('uninstall-result');
+                resultEl.style.display = 'block';
+                resultEl.textContent = r.results ? r.results.join('\n') : '卸载完成';
+                btn.textContent = '卸载完成';
+            } catch(e) {
+                btn.textContent = '卸载失败';
+            }
+        }
+
+        // ===== 错误报告 =====
+        let _errorReportText = '';
+
+        async function generateErrorReport() {
+            document.getElementById('report-modal').classList.remove('hidden');
+            document.getElementById('report-content').textContent = '正在收集诊断信息，请稍候...';
+            lucide.createIcons();
+            try {
+                const resp = await fetch('/api/system/error-report');
+                const r = await resp.json();
+                let lines = [];
+                lines.push('===== 夜鹭机错误报告 =====');
+                lines.push(`版本: ${r.yolushiki_version || '未知'}`);
+                lines.push(`生成时间: ${new Date().toLocaleString('zh-CN')}`);
+                lines.push('');
+                lines.push('--- 系统信息 ---');
+                lines.push(`操作系统: ${r.os || '未知'}`);
+                lines.push(`架构: ${r.arch || '未知'}`);
+                lines.push(`内核: ${r.kernel || '未知'}`);
+                lines.push(`总内存: ${r.total_memory || '未知'}`);
+                lines.push(`磁盘(总/已用/可用/占比): ${r.disk || '未知'}`);
+                lines.push('');
+                lines.push('--- 服务器信息 ---');
+                lines.push(`IP: ${r.server_ip || '未知'}`);
+                lines.push(`IP属地: ${r.ip_region || '未知'}`);
+                lines.push('');
+                lines.push('--- 依赖状态 ---');
+                if (r.dependencies) {
+                    for (const [k, v] of Object.entries(r.dependencies)) {
+                        lines.push(`  ${k}: ${v}`);
+                    }
+                }
+                lines.push('');
+                lines.push('--- 服务状态 ---');
+                if (r.services) {
+                    const svcMap = {napcat:'NapCat', astrbot:'AstrBot', sillytavern:'SillyTavern'};
+                    for (const [k, v] of Object.entries(r.services)) {
+                        if (typeof v === 'object') {
+                            lines.push(`  ${svcMap[k]||k}: ${v.status} (内存: ${v.memory_mb}MB)`);
+                        } else {
+                            lines.push(`  ${k}: ${v}`);
+                        }
+                    }
+                }
+                lines.push('');
+                lines.push('--- 安装状态 ---');
+                lines.push(`阶段: ${r.install_stage || '未知'}`);
+                lines.push(`进度: ${r.install_progress || 0}%`);
+                lines.push(`当前步骤: ${r.install_current_stage || '无'}`);
+                lines.push(`消息: ${r.install_message || '无'}`);
+                lines.push('');
+                lines.push('--- 配置 ---');
+                if (r.config) {
+                    lines.push(`已安装: ${r.config.installed}`);
+                    lines.push(`AstrBot端口: ${r.config.astrbot_port}`);
+                    lines.push(`NapCat端口: ${r.config.napcat_port}`);
+                    lines.push(`酒馆端口: ${r.config.tavern_port}`);
+                }
+                if (r.recent_logs && r.recent_logs.length > 0) {
+                    lines.push('');
+                    lines.push('--- 最近日志(最后50条) ---');
+                    r.recent_logs.forEach(l => lines.push(l));
+                }
+                lines.push('');
+                lines.push('===== 报告结束 =====');
+                _errorReportText = lines.join('\n');
+                document.getElementById('report-content').textContent = _errorReportText;
+            } catch(e) {
+                document.getElementById('report-content').textContent = '生成报告失败: ' + e.message;
+            }
+        }
+
+        async function copyErrorReport() {
+            if (!_errorReportText) return;
+            try {
+                await navigator.clipboard.writeText(_errorReportText);
+                const btn = document.getElementById('copy-report-btn');
+                btn.innerHTML = '<i data-lucide="check"></i> 已复制';
+                lucide.createIcons();
+                setTimeout(() => {
+                    btn.innerHTML = '<i data-lucide="copy"></i> 一键复制';
+                    lucide.createIcons();
+                }, 2000);
+            } catch(e) {
+                const ta = document.createElement('textarea');
+                ta.value = _errorReportText;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                alert('已复制到剪贴板');
+            }
+        }
+
+        function hideReportModal() {
+            document.getElementById('report-modal').classList.add('hidden');
         }
     </script>
 </body>

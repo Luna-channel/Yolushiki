@@ -48,10 +48,6 @@ run_with_spinner() {
     "$@" > /dev/null 2>&1 &
     spin $! "$msg"
 }
-INSTALLER_DIR="/tmp/yolushiki_installer"
-# TODO: 替换为实际的下载地址
-DOWNLOAD_BASE="https://raw.githubusercontent.com/Luna-channel/yolushiki/main/installer"
-
 clear
 echo -e "${CYAN}"
 cat << 'EOF'
@@ -78,26 +74,109 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 清理可能残留的旧管理面板进程（用户重跑脚本时避免9999端口冲突）
+# 强制确保9999端口可用（夜鹭机管理面板优先级最高）
 if command -v pm2 &> /dev/null; then
     pm2 stop yolushiki 2>/dev/null || true
     pm2 delete yolushiki 2>/dev/null || true
 fi
 pkill -f "python3.*app.py.*--port.*9999" 2>/dev/null || true
 fuser -k 9999/tcp 2>/dev/null || true
+# 二次确认端口释放
 sleep 1
+if command -v ss &> /dev/null && ss -tlnp 2>/dev/null | grep -q ":9999 "; then
+    echo -e "      ${YELLOW}⚠${NC}  9999端口仍被占用，强制释放..."
+    fuser -k -9 9999/tcp 2>/dev/null || true
+    sleep 1
+fi
 
 echo -e "${BLUE}[1/5]${NC} 检测系统环境..."
 sleep 0.5
 
-# 检测系统
+# 检测系统和包管理器
+PKG_MANAGER=""
+OS_FAMILY=""
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     echo -e "      ${GREEN}✓${NC} 系统: $PRETTY_NAME"
+    case "$ID" in
+        ubuntu|debian|linuxmint|pop|deepin|kali|elementary)
+            OS_FAMILY="debian"
+            PKG_MANAGER="apt-get"
+            ;;
+        centos|rhel|rocky|almalinux|ol|amzn)
+            OS_FAMILY="rhel"
+            if command -v dnf &> /dev/null; then
+                PKG_MANAGER="dnf"
+            else
+                PKG_MANAGER="yum"
+            fi
+            ;;
+        fedora)
+            OS_FAMILY="fedora"
+            PKG_MANAGER="dnf"
+            ;;
+        arch|manjaro|endeavouros)
+            OS_FAMILY="arch"
+            PKG_MANAGER="pacman"
+            ;;
+        opensuse*|sles)
+            OS_FAMILY="suse"
+            PKG_MANAGER="zypper"
+            ;;
+        *)
+            # 尝试通过包管理器推断
+            if command -v apt-get &> /dev/null; then
+                OS_FAMILY="debian"
+                PKG_MANAGER="apt-get"
+            elif command -v dnf &> /dev/null; then
+                OS_FAMILY="rhel"
+                PKG_MANAGER="dnf"
+            elif command -v yum &> /dev/null; then
+                OS_FAMILY="rhel"
+                PKG_MANAGER="yum"
+            elif command -v pacman &> /dev/null; then
+                OS_FAMILY="arch"
+                PKG_MANAGER="pacman"
+            else
+                echo -e "      ${RED}✗${NC} 不支持的系统: $ID"
+                echo -e "      ${YELLOW}⚠${NC}  目前支持: Ubuntu/Debian/CentOS/RHEL/Fedora/Arch/openSUSE"
+                exit 1
+            fi
+            echo -e "      ${YELLOW}⚠${NC}  未知发行版 $ID，通过包管理器推断为 $OS_FAMILY 系"
+            ;;
+    esac
+    echo -e "      ${GREEN}✓${NC} 包管理器: $PKG_MANAGER ($OS_FAMILY 系)"
 else
-    echo -e "      ${RED}✗${NC} 无法识别系统"
+    echo -e "      ${RED}✗${NC} 无法识别系统（缺少 /etc/os-release）"
     exit 1
 fi
+
+# 通用包安装函数
+pkg_update() {
+    case "$OS_FAMILY" in
+        debian)  apt-get update -qq ;;
+        rhel|fedora) $PKG_MANAGER makecache -q 2>/dev/null || true ;;
+        arch)    pacman -Sy --noconfirm 2>/dev/null || true ;;
+        suse)    zypper refresh -q 2>/dev/null || true ;;
+    esac
+}
+
+pkg_install() {
+    case "$OS_FAMILY" in
+        debian)  apt-get install -y -qq "$@" ;;
+        rhel|fedora) $PKG_MANAGER install -y -q "$@" ;;
+        arch)    pacman -S --noconfirm --needed "$@" ;;
+        suse)    zypper install -y -n "$@" ;;
+    esac
+}
+
+# 检查并安装 curl 和 git（基础依赖）
+for cmd in curl git; do
+    if ! command -v $cmd &> /dev/null; then
+        echo -e "      ${YELLOW}⚠${NC}  $cmd 未安装，正在安装..."
+        pkg_install $cmd > /dev/null 2>&1
+    fi
+done
 
 # 检测内存
 MEM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
@@ -145,22 +224,40 @@ if [ "$NEED_INSTALL" -eq 1 ]; then
     echo -e "      ${YELLOW}⚠${NC}  这个过程可能需要 1-2 分钟，请耐心等待..."
     echo ""
     
-    # 更新系统
-    run_with_spinner "更新软件包列表..." apt-get update -qq
+    # 更新软件包列表
+    run_with_spinner "更新软件包列表..." pkg_update
     
     # 安装Python3
     if ! command -v python3 &> /dev/null; then
-        run_with_spinner "安装 Python3..." apt-get install -y python3 python3-pip -qq
+        case "$OS_FAMILY" in
+            debian) run_with_spinner "安装 Python3..." pkg_install python3 python3-pip ;;
+            rhel|fedora) run_with_spinner "安装 Python3..." pkg_install python3 python3-pip ;;
+            arch) run_with_spinner "安装 Python3..." pkg_install python python-pip ;;
+            suse) run_with_spinner "安装 Python3..." pkg_install python3 python3-pip ;;
+        esac
     fi
     
     # 安装pip（如果没有）
-    if ! command -v pip3 &> /dev/null; then
-        run_with_spinner "安装 pip3..." apt-get install -y python3-pip -qq
+    if ! command -v pip3 &> /dev/null && ! command -v pip &> /dev/null; then
+        case "$OS_FAMILY" in
+            debian) run_with_spinner "安装 pip3..." pkg_install python3-pip ;;
+            rhel|fedora) run_with_spinner "安装 pip3..." pkg_install python3-pip ;;
+            arch) run_with_spinner "安装 pip..." pkg_install python-pip ;;
+            suse) run_with_spinner "安装 pip3..." pkg_install python3-pip ;;
+        esac
     fi
     
-    # 安装Flask（直接用apt，Ubuntu系统最简单的方式）
+    # 安装Flask
     if ! python3 -c "import flask" 2>/dev/null; then
-        run_with_spinner "安装 Flask..." apt-get install -y python3-flask
+        case "$OS_FAMILY" in
+            debian) run_with_spinner "安装 Flask..." pkg_install python3-flask ;;
+            *)
+                # 非Debian系统用pip安装Flask
+                PIP_CMD="pip3"
+                command -v pip3 &> /dev/null || PIP_CMD="pip"
+                run_with_spinner "安装 Flask (pip)..." $PIP_CMD install flask
+                ;;
+        esac
     fi
     
     # 检查
@@ -238,573 +335,26 @@ fi
 
 if [ "$COPY_OK" -eq 0 ]; then
     echo -e "      ${RED}✗${NC}  部分文件复制失败"
-    echo -e "      ${YELLOW}⚠${NC}  请确保安装包完整（app.py, static/, templates/ 都在同一目录）"
-    # 如果下载失败，使用内嵌的精简版（仅包含安装器核心功能）
-    cat > "$YOLUSHIKI_DIR/app.py" << 'PYTHON_EOF'
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""夜鹭机 一键部署 WebUI"""
-
-import os
-import subprocess
-import threading
-import time
-import logging
-from flask import Flask, render_template, jsonify, request
-
-# 关闭 Flask 请求日志
-_werkzeug_log = logging.getLogger('werkzeug')
-_werkzeug_log.setLevel(logging.ERROR)
-
-app = Flask(__name__)
-
-install_status = {
-    "stage": "waiting",
-    "progress": 0,
-    "message": "",
-    "logs": [],
-    "results": {}
-}
-
-config = {
-    "astrbot_port": 6185,
-    "napcat_port": 6099,
-    "tavern_port": 18888,
-    "install_plugins": True
-}
-
-ASTRBOT_PLUGINS = [
-    {"name": "日志拓展插件", "repo": "https://github.com/lxfight/astrbot_plugin_logplus.git", "description": "排错必备，详细日志记录", "selected": True},
-    {"name": "Conversa 主动回复", "repo": "https://github.com/Luna-channel/astrbot_plugin_Conversa.git", "description": "LLM主动问候回复功能", "selected": True},
-    {"name": "人际关系管理", "repo": "https://github.com/Zhalslar/astrbot_plugin_relationship.git", "description": "好友/群管理功能", "selected": True},
-    {"name": "好感度Pro", "repo": "https://github.com/Luna-channel/astrbot_plugin_favourpro.git", "description": "伪记忆/好感度系统", "selected": True}
-]
-
-def log(message):
-    timestamp = time.strftime("%H:%M:%S")
-    log_entry = f"[{timestamp}] {message}"
-    install_status["logs"].append(log_entry)
-    print(log_entry)
-
-def run_command(cmd, cwd=None, stream=False, quiet=False):
-    if not quiet:
-        log(f"执行: {cmd}")
-    try:
-        if stream:
-            # 实时输出模式（用于docker pull等）
-            process = subprocess.Popen(
-                cmd, shell=True, cwd=cwd,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1
-            )
-            output_lines = []
-            last_log_time = 0
-            while True:
-                line = process.stdout.readline()
-                if not line and process.poll() is not None:
-                    break
-                if line:
-                    line = line.strip()
-                    output_lines.append(line)
-                    # 每1秒更新一次日志
-                    now = time.time()
-                    if now - last_log_time >= 1:
-                        # 显示下载进度
-                        if any(k in line for k in ["Downloading", "Pulling", "Download", "Waiting", "Extracting", "complete"]):
-                            log(f"  {line[:80]}")
-                            last_log_time = now
-                            # 同时打印到终端
-                            print(f"\r  {line[:80]}", end="", flush=True)
-            process.wait()
-            return process.returncode == 0, "\n".join(output_lines)
-        else:
-            result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=600)
-            output = result.stdout + result.stderr
-            if result.returncode != 0 and not quiet:
-                log(f"命令失败: {output[-500:] if len(output) > 500 else output}")
-            return result.returncode == 0, output
-    except subprocess.TimeoutExpired:
-        log(f"命令超时（10分钟）")
-        return False, "timeout"
-    except Exception as e:
-        log(f"执行异常: {str(e)}")
-        return False, str(e)
-
-def install_docker():
-    log("检查Docker...")
-    success, output = run_command("docker --version", quiet=True)
-    if success:
-        log(f"Docker已安装: {output.strip()}")
-        return True
-    log("Docker未安装，开始安装...")
-    success, _ = run_command("curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun")
-    if success:
-        run_command("systemctl start docker")
-        run_command("systemctl enable docker")
-    return success
-
-def install_nodejs():
-    log("检查Node.js...")
-    success, output = run_command("node --version", quiet=True)
-    if success and "v" in output:
-        version = int(output.strip().split(".")[0].replace("v", ""))
-        if version >= 18:
-            log(f"Node.js已安装: {output.strip()}")
-            return True
-    log("安装Node.js 20.x...")
-    run_command("curl -fsSL https://deb.nodesource.com/setup_20.x | bash -")
-    success, _ = run_command("apt-get install -y nodejs")
-    return success
-
-def install_pm2():
-    log("检查PM2...")
-    success, output = run_command("pm2 --version", quiet=True)
-    if success:
-        log(f"PM2已安装: {output.strip()}")
-        return True
-    log("PM2未安装，开始安装...")
-    success, _ = run_command("npm install -g pm2")
-    return success
-
-def deploy_astrbot():
-    log("部署AstrBot + NapCat...")
-    astrbot_dir = "/opt/astrbot"
-    run_command(f"mkdir -p {astrbot_dir}")
-    
-    # 直接内嵌yml内容，不需要下载
-    yml_content = '''services:
-  napcat:
-    environment:
-      - NAPCAT_UID=${NAPCAT_UID:-1000}
-      - NAPCAT_GID=${NAPCAT_GID:-1000}
-      - MODE=astrbot
-    ports:
-      - 6099:6099
-    container_name: napcat
-    restart: always
-    image: mlikiowa/napcat-docker:latest
-    volumes:
-      - ./data:/AstrBot/data
-      - ./napcat/config:/app/napcat/config
-      - ./ntqq:/app/.config/QQ
-    networks:
-      - astrbot_network
-  astrbot:
-    environment:
-      - TZ=Asia/Shanghai
-    image: m.daocloud.io/docker.io/soulter/astrbot:latest
-    container_name: astrbot
-    restart: always
-    ports:
-      - "6185:6185"
-    volumes:
-      - ./data:/AstrBot/data
-    networks:
-      - astrbot_network
-networks:
-  astrbot_network:
-    driver: bridge
-'''
-    with open(f"{astrbot_dir}/astrbot.yml", "w") as f:
-        f.write(yml_content)
-    log("astrbot.yml 已生成")
-    
-    log("拉取Docker镜像（实时进度）...")
-    install_status["message"] = "拉取 Docker 镜像中..."
-    run_command("docker compose -f astrbot.yml pull", cwd=astrbot_dir, stream=True)
-    if not os.path.exists(f"{astrbot_dir}/astrbot.yml"):
-        log("拉取 napcat 镜像...")
-        run_command("docker pull mlikiowa/napcat-docker:latest", cwd=astrbot_dir, stream=True)
-        log("拉取 astrbot 镜像...")
-        run_command("docker pull m.daocloud.io/docker.io/soulter/astrbot:latest", cwd=astrbot_dir, stream=True)
-    
-    log("启动Docker容器...")
-    success, _ = run_command("docker compose -f astrbot.yml up -d", cwd=astrbot_dir)
-    if not success:
-        success, _ = run_command("docker-compose -f astrbot.yml up -d", cwd=astrbot_dir)
-    return success
-
-def deploy_sillytavern():
-    log("部署SillyTavern...")
-    tavern_dir = "/opt/sillytavern"
-    package_json = os.path.join(tavern_dir, "package.json")
-    # 检查目录存在但 package.json 不存在（之前克隆失败的残留）
-    if os.path.exists(tavern_dir) and not os.path.exists(package_json):
-        log("检测到不完整的 SillyTavern 目录，清理后重新克隆...")
-        run_command(f"rm -rf {tavern_dir}")
-    if not os.path.exists(tavern_dir):
-        log("克隆SillyTavern...")
-        install_status["message"] = "克隆 SillyTavern 仓库..."
-        success, _ = run_command(f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}", stream=True)
-        if not success:
-            return False
-    # 再次验证克隆是否成功
-    if not os.path.exists(package_json):
-        log("克隆后 package.json 不存在，目录可能不完整")
-        return False
-    log("安装npm依赖...")
-    npm_cmd = "npm install --no-audit --no-fund"
-    install_status["message"] = "安装 npm 依赖..."
-    install_success = False
-    for attempt in range(3):
-        if attempt > 0:
-            log(f"npm install 重试第 {attempt} 次...")
-            run_command("rm -rf node_modules", cwd=tavern_dir)
-            run_command("npm cache clean --force", cwd=tavern_dir)
-        success, _ = run_command(npm_cmd, cwd=tavern_dir)
-        node_modules = os.path.join(tavern_dir, "node_modules")
-        if success:
-            install_success = True
-            break
-        elif os.path.exists(node_modules) and len(os.listdir(node_modules)) > 10:
-            log("npm 返回码非0，但 node_modules 已存在，视为成功")
-            install_success = True
-            break
-    if not install_success:
-        log("npm依赖安装失败，已重试3次")
-        return False
-    log("配置SillyTavern...")
-    config_path = os.path.join(tavern_dir, "config.yaml")
-    # 直接写入完整config.yaml（不再依赖timeout+sed的脆弱方式）
-    config_content = f"""dataRoot: ./data
-listen: true
-listenAddress:
-  ipv4: 0.0.0.0
-  ipv6: '[::]'
-protocol:
-  ipv4: true
-  ipv6: false
-dnsPreferIPv6: false
-browserLaunch:
-  enabled: false
-  browser: 'default'
-  hostname: 'auto'
-  port: -1
-  avoidLocalhost: false
-port: {config['tavern_port']}
-whitelistMode: false
-basicAuthMode: false
-enableUserAccounts: true
-enableDiscreetLogin: false
-sessionTimeout: 86400
-securityOverride: true
-disableCsrfProtection: false
-"""
-    with open(config_path, "w") as f:
-        f.write(config_content)
-    log(f"config.yaml 已写入（端口:{config['tavern_port']}, securityOverride:true）")
-    log("使用PM2启动SillyTavern...")
-    run_command("pm2 delete sillytavern 2>/dev/null || true")
-    success, _ = run_command(f'pm2 start server.js --name "sillytavern"', cwd=tavern_dir)
-    if success:
-        run_command("pm2 save")
-        run_command("pm2 startup 2>/dev/null || true")
-        # 等待几秒确认进程存活
-        import time as _t
-        _t.sleep(5)
-        alive, status_output = run_command("pm2 show sillytavern")
-        if alive and "online" in status_output.lower():
-            log(f"SillyTavern 已在端口 {config['tavern_port']} 成功启动")
-            set_sillytavern_password(tavern_dir)
-        else:
-            log("⚠ SillyTavern 可能未正常启动，请检查 pm2 logs sillytavern")
-    return success
-
-def set_sillytavern_password(tavern_dir):
-    import glob, hashlib, base64
-    storage_dir = os.path.join(tavern_dir, "data", "_storage")
-    for _ in range(15):
-        if os.path.exists(storage_dir):
-            break
-        import time as _t2
-        _t2.sleep(1)
-    if not os.path.exists(storage_dir):
-        log("SillyTavern 存储目录未创建，跳过账号设置")
-        return
-    user_files = glob.glob(os.path.join(storage_dir, "*.json"))
-    target_file = None
-    for f in user_files:
-        try:
-            with open(f, "r", encoding="utf-8") as fp:
-                data = json.load(fp)
-                if data.get("key") == "user:default-user":
-                    target_file = f
-                    break
-        except:
-            continue
-    if not target_file:
-        log("未找到 default-user 存储文件，跳过账号设置")
-        return
-    username = config.get("tavern_username", "admin")
-    password = config.get("tavern_password", "")
-    if not password:
-        password = secrets.token_urlsafe(12)
-        log(f"未设置密码，自动生成: {password}")
-    salt = base64.b64encode(os.urandom(16)).decode('utf-8')
-    password_hash = hashlib.scrypt(password.encode('utf-8'), salt=salt.encode('utf-8'), n=16384, r=8, p=1, dklen=64)
-    password_hash_b64 = base64.b64encode(password_hash).decode('utf-8')
-    try:
-        with open(target_file, "r", encoding="utf-8") as fp:
-            data = json.load(fp)
-        data["value"]["password"] = password_hash_b64
-        data["value"]["salt"] = salt
-        data["key"] = f"user:{username}"
-        data["value"]["name"] = username
-        data["value"]["admin"] = True
-        data["value"]["enabled"] = True
-        with open(target_file, "w", encoding="utf-8") as fp:
-            json.dump(data, fp, ensure_ascii=False)
-        config["tavern_username"] = username
-        config["tavern_password"] = password
-        save_config()
-        log(f"SillyTavern 账号已设置 - 用户名: {username}")
-        log("重启 SillyTavern 以应用账号设置...")
-        run_command("pm2 restart sillytavern", quiet=True)
-        import time as _t3
-        _t3.sleep(3)
-    except Exception as e:
-        log(f"设置 SillyTavern 账号失败: {e}")
-
-def install_astrbot_plugins(selected_plugins):
-    log("安装AstrBot插件...")
-    plugins_dir = "/opt/astrbot/data/plugins"
-    run_command(f"mkdir -p {plugins_dir}")
-    for plugin in selected_plugins:
-        if plugin.get("selected"):
-            plugin_name = plugin["repo"].split("/")[-1].replace(".git", "")
-            plugin_path = os.path.join(plugins_dir, plugin_name)
-            if os.path.exists(plugin_path):
-                log(f"插件已存在: {plugin['name']}")
-                continue
-            log(f"安装插件: {plugin['name']}")
-            success, _ = run_command(f"git clone {plugin['repo']} {plugin_name}", cwd=plugins_dir)
-            if not success:
-                log(f"插件安装失败: {plugin['name']}")
-
-def configure_firewall():
-    log("配置防火墙...")
-    ports = [config["astrbot_port"], config["napcat_port"], config["tavern_port"]]
-    ufw_exists, _ = run_command("which ufw")
-    firewalld_exists, _ = run_command("which firewall-cmd")
-    for port in ports:
-        if ufw_exists:
-            run_command(f"ufw allow {port}/tcp")
-        elif firewalld_exists:
-            run_command(f"firewall-cmd --permanent --add-port={port}/tcp")
-    if firewalld_exists:
-        run_command("firewall-cmd --reload")
-    log("防火墙配置完成")
-
-def do_install():
-    global install_status
-    try:
-        install_status["stage"] = "installing"
-        install_status["progress"] = 5
-        install_status["message"] = "更新系统..."
-        run_command("apt-get update")
-        
-        install_status["progress"] = 15
-        install_status["message"] = "安装Docker..."
-        if not install_docker():
-            raise Exception("Docker安装失败")
-        
-        install_status["progress"] = 30
-        install_status["message"] = "安装Node.js..."
-        if not install_nodejs():
-            raise Exception("Node.js安装失败")
-        
-        install_status["progress"] = 40
-        install_status["message"] = "安装PM2..."
-        if not install_pm2():
-            raise Exception("PM2安装失败")
-        
-        install_status["progress"] = 50
-        install_status["message"] = "部署AstrBot + NapCat..."
-        if not deploy_astrbot():
-            raise Exception("AstrBot部署失败")
-        
-        install_status["progress"] = 70
-        install_status["message"] = "部署SillyTavern..."
-        if not deploy_sillytavern():
-            raise Exception("SillyTavern部署失败")
-        
-        if config["install_plugins"]:
-            install_status["progress"] = 85
-            install_status["message"] = "安装插件..."
-            install_astrbot_plugins(ASTRBOT_PLUGINS)
-        
-        install_status["progress"] = 95
-        install_status["message"] = "配置防火墙..."
-        configure_firewall()
-        
-        install_status["progress"] = 100
-        install_status["message"] = "安装完成！"
-        install_status["stage"] = "completed"
-        
-        success, ip_output = run_command("curl -s ifconfig.me || curl -s ip.sb")
-        server_ip = ip_output.strip() if success else "你的服务器IP"
-        
-        install_status["results"] = {
-            "server_ip": server_ip,
-            "napcat_url": f"http://{server_ip}:{config['napcat_port']}",
-            "astrbot_url": f"http://{server_ip}:{config['astrbot_port']}",
-            "tavern_url": f"http://{server_ip}:{config['tavern_port']}"
-        }
-        log("🎉 夜鹭机安装完成！")
-    except Exception as e:
-        install_status["stage"] = "error"
-        install_status["message"] = str(e)
-        log(f"❌ 安装失败: {str(e)}")
-
-@app.route("/")
-def index():
-    safe_config = {
-        "installed": False,
-        "astrbot_port": config.get("astrbot_port", 6185),
-        "napcat_port": config.get("napcat_port", 6099),
-        "tavern_port": config.get("tavern_port", 18888),
-        "server_ip": "",
-        "install_plugins": config.get("install_plugins", True)
-    }
-    return render_template("index.html", plugins=ASTRBOT_PLUGINS, config=safe_config)
-
-@app.route("/api/status")
-def get_status():
-    return jsonify(install_status)
-
-@app.route("/api/install", methods=["POST"])
-def start_install():
-    global config, install_status
-    install_status = {"stage": "installing", "progress": 0, "message": "开始安装...", "logs": [], "results": {}}
-    data = request.json or {}
-    if "tavern_port" in data:
-        config["tavern_port"] = int(data["tavern_port"])
-    if "install_plugins" in data:
-        config["install_plugins"] = data["install_plugins"]
-    if "selected_plugins" in data:
-        for i, plugin in enumerate(ASTRBOT_PLUGINS):
-            plugin["selected"] = i in data["selected_plugins"]
-    thread = threading.Thread(target=do_install)
-    thread.start()
-    return jsonify({"success": True})
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=9999)
-    parser.add_argument("--host", default="0.0.0.0")
-    args = parser.parse_args()
-    app.run(host=args.host, port=args.port, debug=False, threaded=True)
-PYTHON_EOF
-
-    # 内嵌基础 index.html 模板
-    cat > "$YOLUSHIKI_DIR/templates/index.html" << 'HTML_EOF'
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>夜鹭机 - 一键部署</title>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#0a1628 0%,#1a2a4a 100%);min-height:100vh;color:#e0e0e0;display:flex;align-items:center;justify-content:center}
-        .container{max-width:700px;width:100%;padding:30px}
-        .header{text-align:center;margin-bottom:30px}
-        .header h1{font-size:2rem;color:#fff;margin-bottom:8px}
-        .header p{color:#888}
-        .card{background:rgba(255,255,255,0.05);border-radius:16px;padding:24px;margin-bottom:20px;border:1px solid rgba(255,255,255,0.1)}
-        .card h2{color:#fff;margin-bottom:16px;font-size:1.1rem}
-        .form-group{margin-bottom:16px}
-        .form-group label{display:block;margin-bottom:6px;color:#ccc}
-        .form-group input{width:100%;padding:10px 14px;border:1px solid rgba(255,255,255,0.2);border-radius:8px;background:rgba(0,0,0,0.3);color:#fff}
-        .btn{display:block;width:100%;padding:14px;font-size:1rem;font-weight:600;border:none;border-radius:10px;cursor:pointer;background:linear-gradient(135deg,#4a8ecf 0%,#2d5a8e 100%);color:#fff}
-        .btn:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(45,90,142,0.4)}
-        .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
-        .progress{display:none}
-        .progress.active{display:block}
-        .progress-bar{background:rgba(0,0,0,0.3);border-radius:10px;height:16px;overflow:hidden;margin-bottom:12px}
-        .progress-fill{height:100%;background:linear-gradient(90deg,#4a8ecf 0%,#27ae60 100%);width:0%;transition:width 0.5s}
-        .progress-text{text-align:center;color:#fff;margin-bottom:16px}
-        .log-box{background:#060d18;border-radius:8px;padding:12px;height:180px;overflow-y:auto;font-family:monospace;font-size:0.8rem;color:#00ff00}
-        .result{display:none}
-        .result.active{display:block}
-        .result-link{display:block;padding:16px;background:rgba(0,0,0,0.3);border-radius:10px;margin-bottom:10px;text-decoration:none;color:#4a8ecf}
-        .result-link:hover{background:rgba(74,142,207,0.1)}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🌙 夜鹭机</h1>
-            <p>一键部署 AstrBot + SillyTavern</p>
-        </div>
-        <div id="setup" class="card">
-            <h2>端口配置</h2>
-            <div class="form-group">
-                <label>SillyTavern 端口</label>
-                <input type="number" id="tavern-port" value="18888" min="1024" max="65535">
-            </div>
-            <button class="btn" onclick="startInstall()">🚀 开始安装</button>
-        </div>
-        <div id="progress" class="card progress">
-            <h2>正在安装...</h2>
-            <div class="progress-bar"><div class="progress-fill" id="bar"></div></div>
-            <div class="progress-text" id="msg">准备中...</div>
-            <div class="log-box" id="logs"></div>
-        </div>
-        <div id="result" class="card result">
-            <h2>🎉 安装完成！</h2>
-            <a class="result-link" id="link-napcat" href="#" target="_blank">📱 NapCat 扫码登录</a>
-            <a class="result-link" id="link-astrbot" href="#" target="_blank">🤖 AstrBot 管理面板</a>
-            <a class="result-link" id="link-tavern" href="#" target="_blank">🍺 SillyTavern 云酒馆</a>
-        </div>
-    </div>
-    <script>
-        const CONFIG = {{ config | tojson }};
-        let interval = null;
-        function startInstall() {
-            const port = document.getElementById('tavern-port').value;
-            if (port < 1024 || port > 65535) { alert('端口必须在1024-65535之间'); return; }
-            document.getElementById('setup').style.display = 'none';
-            document.getElementById('progress').classList.add('active');
-            fetch('/api/install', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tavern_port: port, install_plugins: true, selected_plugins: [0,1,2,3] })
-            });
-            interval = setInterval(checkStatus, 2000);
-        }
-        function checkStatus() {
-            fetch('/api/status').then(r => r.json()).then(data => {
-                document.getElementById('bar').style.width = data.progress + '%';
-                document.getElementById('msg').textContent = data.message + ' (' + data.progress + '%)';
-                document.getElementById('logs').innerHTML = data.logs.map(l => '<div>' + l + '</div>').join('');
-                document.getElementById('logs').scrollTop = 99999;
-                if (data.stage === 'completed') {
-                    clearInterval(interval);
-                    document.getElementById('progress').classList.remove('active');
-                    document.getElementById('result').classList.add('active');
-                    document.getElementById('link-napcat').href = data.results.napcat_url;
-                    document.getElementById('link-napcat').textContent = '📱 NapCat: ' + data.results.napcat_url;
-                    document.getElementById('link-astrbot').href = data.results.astrbot_url;
-                    document.getElementById('link-astrbot').textContent = '🤖 AstrBot: ' + data.results.astrbot_url;
-                    document.getElementById('link-tavern').href = data.results.tavern_url;
-                    document.getElementById('link-tavern').textContent = '🍺 SillyTavern: ' + data.results.tavern_url;
-                } else if (data.stage === 'error') {
-                    clearInterval(interval);
-                    alert('安装失败: ' + data.message);
-                }
-            });
-        }
-    </script>
-</body>
-</html>
-HTML_EOF
-
-    echo -e "      ${YELLOW}⚠${NC}  使用内嵌备份版（功能受限）"
-else
-    echo -e "      ${GREEN}✓${NC}  管理面板文件复制完成"
+    echo ""
+    echo -e "${RED}══════════════════════════════════════════════════${NC}"
+    echo -e "${RED}  ❌ 安装包文件不完整！${NC}"
+    echo -e "${RED}══════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}  请确保以下文件都在同一目录下：${NC}"
+    echo -e "${CYAN}    - app.py（主程序）${NC}"
+    echo -e "${CYAN}    - templates/ 目录（包含所有 .html 文件）${NC}"
+    echo -e "${CYAN}    - static/ 目录（包含 logo 等资源）${NC}"
+    echo ""
+    echo -e "${YELLOW}  解决方法：${NC}"
+    echo -e "${CYAN}    重新下载完整的安装包，将整个 yolushiki 文件夹${NC}"
+    echo -e "${CYAN}    上传到服务器的 /opt 目录下，然后重新运行安装命令。${NC}"
+    echo ""
+    echo -e "${RED}══════════════════════════════════════════════════${NC}"
+    exit 1
 fi
+
+echo -e "      ${GREEN}✓${NC}  管理面板文件复制完成"
+
 
 echo -e "      ${GREEN}✓${NC} 安装向导已就绪"
 

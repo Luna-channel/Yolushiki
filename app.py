@@ -4,6 +4,8 @@
 夜鹭机 管理面板 (Phase 2)
 """
 
+VERSION = "0.3.0"
+
 import json
 import os
 import secrets
@@ -16,7 +18,6 @@ import base64
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
 
 # ========== 持久化配置 ==========
 
@@ -30,7 +31,8 @@ DEFAULT_CONFIG = {
     "napcat_port": 6099,
     "tavern_port": 18888,
     "install_plugins": True,
-    "server_ip": ""
+    "server_ip": "",
+    "secret_key": None
 }
 
 
@@ -55,6 +57,12 @@ def save_config():
 
 
 config = load_config()
+
+# secret_key 持久化：首次生成后保存，重启不再刷新 session
+if not config.get("secret_key"):
+    config["secret_key"] = secrets.token_hex(32)
+    save_config()
+app.secret_key = config["secret_key"]
 
 # 全局安装状态
 install_status = {
@@ -139,7 +147,7 @@ def run_command(cmd, cwd=None, quiet=False):
     try:
         result = subprocess.run(
             cmd, shell=True, cwd=cwd,
-            capture_output=True, text=True, timeout=300
+            capture_output=True, text=True, timeout=600
         )
         if result.returncode != 0:
             if not quiet:
@@ -248,13 +256,34 @@ def get_service_status(name):
                 "uptime": 0, "restarts": 0, "memory": mem, "cpu": cpu}
 
 
+def check_napcat_error():
+    """检查 NapCat 最近日志中是否有连接错误"""
+    ok, output = run_command("docker logs napcat --tail 30 2>&1", quiet=True)
+    if not ok or not output:
+        return ""
+    error_keywords = ["error", "failed", "断开", "disconnect", "ECONNREFUSED", "timeout", "登录失败"]
+    lines = output.strip().split("\n")
+    for line in reversed(lines):
+        lower = line.lower()
+        if any(kw.lower() in lower for kw in error_keywords):
+            return line.strip()[:120]
+    return ""
+
+
 def get_all_services_status():
     """获取所有服务状态"""
-    return {
+    statuses = {
         "napcat": get_service_status("napcat"),
         "astrbot": get_service_status("astrbot"),
         "sillytavern": get_service_status("sillytavern"),
     }
+    # M5: 检查 NapCat 日志中的连接错误
+    if statuses["napcat"].get("status") == "running":
+        napcat_err = check_napcat_error()
+        if napcat_err:
+            statuses["napcat"]["last_error"] = napcat_err
+            statuses["napcat"]["error_hint"] = "检测到连接异常，建议重启NapCat后重新扫码登录"
+    return statuses
 
 
 def service_action(name, action):
@@ -360,6 +389,47 @@ def get_napcat_token():
     return ""
 
 
+# ========== 系统兼容性 ==========
+
+def detect_pkg_manager():
+    """检测系统包管理器，支持多发行版"""
+    for cmd in ['apt-get', 'dnf', 'yum', 'pacman', 'zypper']:
+        ok, _ = run_command(f"which {cmd}", quiet=True)
+        if ok:
+            return cmd
+    return 'apt-get'
+
+
+def pkg_update():
+    """通用包列表更新"""
+    pm = detect_pkg_manager()
+    ok = False
+    if pm == 'apt-get':
+        ok, _ = run_command("apt-get update -qq")
+    elif pm in ('dnf', 'yum'):
+        ok, _ = run_command(f"{pm} makecache -q")
+    elif pm == 'pacman':
+        ok, _ = run_command("pacman -Sy --noconfirm")
+    elif pm == 'zypper':
+        ok, _ = run_command("zypper refresh -q")
+    if not ok:
+        log("⚠ 系统包列表更新失败，可能原因：网络不通或软件源不可用。后续安装可能受影响，但会继续尝试")
+
+
+def pkg_install(packages):
+    """通用包安装"""
+    pm = detect_pkg_manager()
+    if pm == 'apt-get':
+        return run_command(f"apt-get install -y -qq {packages}")
+    elif pm in ('dnf', 'yum'):
+        return run_command(f"{pm} install -y -q {packages}")
+    elif pm == 'pacman':
+        return run_command(f"pacman -S --noconfirm --needed {packages}")
+    elif pm == 'zypper':
+        return run_command(f"zypper install -y -n {packages}")
+    return False, "未知包管理器"
+
+
 # ========== 部署函数（保留 Phase 1 逻辑） ==========
 
 def install_docker():
@@ -421,8 +491,17 @@ def install_nodejs():
             log(f"Node.js已安装: {output.strip()}")
             return True
     log("安装Node.js 20.x...")
+    # NodeSource 脚本支持 Debian/Ubuntu/RHEL/CentOS/Fedora
     run_command("curl -fsSL https://deb.nodesource.com/setup_20.x | bash -")
-    success, _ = run_command("apt-get install -y nodejs")
+    pm = detect_pkg_manager()
+    if pm == 'apt-get':
+        success, _ = run_command("apt-get install -y nodejs")
+    elif pm in ('dnf', 'yum'):
+        success, _ = run_command(f"{pm} install -y nodejs")
+    elif pm == 'pacman':
+        success, _ = run_command("pacman -S --noconfirm nodejs npm")
+    else:
+        success, _ = run_command("apt-get install -y nodejs")
     return success
 
 
@@ -442,17 +521,43 @@ def install_pm2():
     return success
 
 
-def deploy_astrbot():
-    """部署AstrBot + NapCat"""
-    log("部署AstrBot + NapCat...")
-    astrbot_dir = "/opt/astrbot"
-    run_command(f"mkdir -p {astrbot_dir}")
-    # 直接内嵌 yml（使用镜像加速地址，避免从 GitHub 下载）
-    yml_content = '''services:
+def generate_tavern_config_yaml():
+    """生成 SillyTavern config.yaml 内容（统一维护，避免多处重复）"""
+    # 关键：必须包含 securityOverride: true，否则 listen:true + whitelistMode:false 时
+    # SillyTavern 的 logSecurityAlert() 会直接 process.exit(1) 杀死进程
+    return f"""dataRoot: ./data
+listen: true
+listenAddress:
+  ipv4: 0.0.0.0
+  ipv6: '[::]'
+protocol:
+  ipv4: true
+  ipv6: false
+dnsPreferIPv6: false
+browserLaunch:
+  enabled: false
+  browser: 'default'
+  hostname: 'auto'
+  port: -1
+  avoidLocalhost: false
+port: {config['tavern_port']}
+whitelistMode: false
+basicAuthMode: false
+enableUserAccounts: true
+enableDiscreetLogin: false
+sessionTimeout: 86400
+securityOverride: true
+disableCsrfProtection: false
+"""
+
+
+def generate_astrbot_yml():
+    """生成 astrbot.yml 内容（统一维护，避免多处重复）"""
+    return '''services:
   napcat:
     environment:
-      - NAPCAT_UID=${NAPCAT_UID:-1000}
-      - NAPCAT_GID=${NAPCAT_GID:-1000}
+      - NAPCAT_UID=${{NAPCAT_UID:-1000}}
+      - NAPCAT_GID=${{NAPCAT_GID:-1000}}
       - MODE=astrbot
     ports:
       - 6099:6099
@@ -477,10 +582,22 @@ def deploy_astrbot():
       - ./data:/AstrBot/data
     networks:
       - astrbot_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 networks:
   astrbot_network:
     driver: bridge
 '''
+
+
+def deploy_astrbot():
+    """部署AstrBot + NapCat"""
+    log("部署AstrBot + NapCat...")
+    astrbot_dir = "/opt/astrbot"
+    run_command(f"mkdir -p {astrbot_dir}")
+    yml_content = generate_astrbot_yml()
     with open(f"{astrbot_dir}/astrbot.yml", "w") as f:
         f.write(yml_content)
     log("astrbot.yml 已生成（含镜像加速）")
@@ -498,10 +615,9 @@ networks:
             cwd=astrbot_dir, generation=install_generation
         )
     if not pull_ok:
-        log("Docker镜像拉取失败，请检查网络或更换Docker镜像源")
+        log("❌ Docker镜像拉取失败。可能原因：网络连接不稳定或镜像源不可用。建议操作：点击安装页面的‘镜像加速’按钮更换加速源后重试")
         return False
-# 启动容器
-
+    # 启动容器
     log("启动Docker容器...")
     install_status["message"] = "启动 Docker 容器..."
     success, _ = run_command("docker compose -f astrbot.yml up -d", cwd=astrbot_dir)
@@ -534,14 +650,14 @@ def deploy_sillytavern():
             generation=install_generation
         )
         if not success and git_proxy:
-            log("代理克隆失败，尝试直连 GitHub...")
+            log("代理克隆失败，尝试直接连接 GitHub...")
             run_command(f"rm -rf {tavern_dir}")
             success, _ = run_command_stream(
                 f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}",
                 generation=install_generation
             )
         if not success:
-            log("SillyTavern 仓库克隆失败")
+            log("❌ SillyTavern 仓库克隆失败。可能原因：服务器无法访问 GitHub。建议操作：点击‘镜像加速’添加 Git 代理后重试")
             return False
     # 再次验证克隆是否成功（防止 git 返回成功但目录为空的情况）
     if not os.path.exists(package_json):
@@ -573,36 +689,10 @@ def deploy_sillytavern():
             install_success = True
             break
     if not install_success:
-        log("npm依赖安装失败，已重试3次")
+        log("❌ npm依赖安装失败（已重试3次）。可能原因：网络不稳定或 npm 源不可用。建议操作：点击‘镜像加速’设置 npm 镜像源后重试")
         return False
-    # 直接写入完整config.yaml
-    # 关键：必须包含 securityOverride: true，否则 listen:true + whitelistMode:false 时
-    # SillyTavern 的 logSecurityAlert() 会直接 process.exit(1) 杀死进程
     log("配置SillyTavern...")
-    config_content = f"""dataRoot: ./data
-listen: true
-listenAddress:
-  ipv4: 0.0.0.0
-  ipv6: '[::]'
-protocol:
-  ipv4: true
-  ipv6: false
-dnsPreferIPv6: false
-browserLaunch:
-  enabled: false
-  browser: 'default'
-  hostname: 'auto'
-  port: -1
-  avoidLocalhost: false
-port: {config['tavern_port']}
-whitelistMode: false
-basicAuthMode: false
-enableUserAccounts: true
-enableDiscreetLogin: false
-sessionTimeout: 86400
-securityOverride: true
-disableCsrfProtection: false
-"""
+    config_content = generate_tavern_config_yaml()
     config_path = os.path.join(tavern_dir, "config.yaml")
     with open(config_path, "w") as f:
         f.write(config_content)
@@ -810,7 +900,7 @@ def do_install(generation):
         if missing:
             log(f"需要安装: {', '.join(missing)}")
             install_status["message"] = "更新系统包..."
-            run_command("apt-get update -qq")
+            pkg_update()
         else:
             log("所有依赖已就绪，跳过安装")
 
@@ -820,7 +910,7 @@ def do_install(generation):
             install_status["progress"] = 8
             install_status["message"] = "安装 Docker..."
             if not install_docker():
-                raise Exception("Docker安装失败")
+                raise Exception("Docker安装失败。可能原因：网络无法访问 Docker 官方服务器。请检查服务器网络连接")
 
         if cancelled(): return
 
@@ -828,7 +918,7 @@ def do_install(generation):
             install_status["progress"] = 15
             install_status["message"] = "安装 Node.js..."
             if not install_nodejs():
-                raise Exception("Node.js安装失败")
+                raise Exception("Node.js安装失败。可能原因：网络无法访问 NodeSource 服务器。请检查网络连接")
 
         if cancelled(): return
 
@@ -836,7 +926,7 @@ def do_install(generation):
             install_status["progress"] = 20
             install_status["message"] = "安装 PM2..."
             if not install_pm2():
-                raise Exception("PM2安装失败")
+                raise Exception("PM2安装失败。可能原因：NPM 无法访问。建议设置 npm 镜像加速后重试")
 
         if cancelled(): return
 
@@ -848,7 +938,7 @@ def do_install(generation):
             install_status["progress"] = 25
             install_status["message"] = "部署 AstrBot + NapCat..."
             if not deploy_astrbot():
-                raise Exception("AstrBot部署失败")
+                raise Exception("AstrBot部署失败。可能原因：Docker镜像拉取或容器启动失败。建议更换 Docker 镜像源后重试")
 
             # 等待 NapCat 容器初始化完成后获取 token
             install_status["progress"] = 55
@@ -877,7 +967,7 @@ def do_install(generation):
             install_status["progress"] = 65
             install_status["message"] = "部署 SillyTavern..."
             if not deploy_sillytavern():
-                raise Exception("SillyTavern部署失败")
+                raise Exception("SillyTavern部署失败。可能原因：GitHub克隆或npm依赖安装失败。建议设置镜像加速后重试")
         else:
             log("跳过 SillyTavern 安装")
 
@@ -891,11 +981,16 @@ def do_install(generation):
         install_status["progress"] = 95
         install_status["message"] = "保存配置..."
 
-        # 获取服务器 IP：优先用本地命令，避免外部网络请求卡住
+        # 获取服务器公网 IP
         server_ip = ""
-        ok, ip_out = run_command("hostname -I | awk '{print $1}'", quiet=True)
+        ok, ip_out = run_command("curl -s --connect-timeout 3 ifconfig.me || curl -s --connect-timeout 3 ip.sb", quiet=True)
         if ok and ip_out.strip():
             server_ip = ip_out.strip()
+        if not server_ip:
+            # fallback: 使用本地命令
+            ok, ip_out = run_command("hostname -I | awk '{print $1}'", quiet=True)
+            if ok and ip_out.strip():
+                server_ip = ip_out.strip()
         if not server_ip:
             server_ip = "你的服务器IP"
         config["server_ip"] = server_ip
@@ -990,7 +1085,7 @@ def auth_login():
     if not token:
         return jsonify({"error": "请输入Token"}), 400
     if token != config.get("token"):
-        return jsonify({"error": "Token错误"}), 401
+        return jsonify({"error": "Token错误。如果忘记了Token，请在服务器终端运行：cat /opt/yolushiki/config.json"}), 401
     session["authenticated"] = True
     session.permanent = True
     return jsonify({"success": True})
@@ -998,14 +1093,67 @@ def auth_login():
 
 @app.route("/api/auth/logout", methods=["POST"])
 def auth_logout():
-    """退出登录并关闭服务器"""
+    """退出登录（仅清除会话，不关闭服务器）"""
     session.clear()
-    # 延迟关闭服务器，让响应先返回
+    return jsonify({"success": True})
+
+
+@app.route("/api/system/shutdown", methods=["POST"])
+@login_required
+def system_shutdown():
+    """关闭夜鹭机管理面板（独立于logout）"""
+    session.clear()
     def shutdown_server():
         time.sleep(1)
         os._exit(0)
     threading.Thread(target=shutdown_server, daemon=True).start()
     return jsonify({"success": True})
+
+
+@app.route("/api/system/uninstall", methods=["POST"])
+@login_required
+def system_uninstall():
+    """卸载/清理夜鹭机"""
+    data = request.json or {}
+    remove_containers = data.get("remove_containers", True)
+    remove_images = data.get("remove_images", False)
+    remove_data = data.get("remove_data", False)
+    remove_sillytavern = data.get("remove_sillytavern", True)
+    remove_dependencies = data.get("remove_dependencies", False)
+    results = []
+    if remove_containers:
+        cmds = [
+            ("docker compose -f /opt/astrbot/astrbot.yml down", "停止 AstrBot/NapCat 容器"),
+            ("docker-compose -f /opt/astrbot/astrbot.yml down", "停止容器(兼容命令)"),
+        ]
+        for cmd, desc in cmds:
+            ok, out = run_command(cmd, quiet=True)
+            if ok:
+                results.append(f"✓ {desc}")
+                break
+        else:
+            results.append("⚠ 容器停止失败或已不存在")
+    if remove_images:
+        for img in ["mlikiowa/napcat-docker", "soulter/astrbot", "m.daocloud.io/docker.io/soulter/astrbot"]:
+            run_command(f"docker rmi {img} 2>/dev/null", quiet=True)
+        results.append("✓ 已删除相关 Docker 镜像")
+    if remove_data:
+        for d in ["/opt/astrbot"]:
+            run_command(f"rm -rf {d}", quiet=True)
+        results.append("✓ 已删除 AstrBot/NapCat 数据 (/opt/astrbot)")
+    if remove_sillytavern:
+        run_command("pm2 delete sillytavern 2>/dev/null", quiet=True)
+        if remove_data:
+            run_command("rm -rf /opt/sillytavern", quiet=True)
+            results.append("✓ 已删除 SillyTavern 数据 (/opt/sillytavern)")
+        else:
+            results.append("✓ 已停止 SillyTavern（数据保留）")
+    if remove_dependencies:
+        run_command("pm2 delete yolushiki 2>/dev/null", quiet=True)
+        run_command("npm uninstall -g pm2 2>/dev/null", quiet=True)
+        results.append("✓ 已卸载 PM2")
+        results.append("⚠ Docker 和 Node.js 未自动卸载（可能被其他服务使用），如需卸载请手动操作")
+    return jsonify({"success": True, "results": results})
 
 
 @app.route("/api/auth/change-token", methods=["POST"])
@@ -1045,7 +1193,8 @@ def index():
     }
     return render_template("index.html",
                            plugins=ASTRBOT_PLUGINS,
-                           config=safe_config)
+                           config=safe_config,
+                           version=VERSION)
 
 
 @app.route("/tutorial/<name>")
@@ -1055,7 +1204,18 @@ def tutorial(name):
     templates = ["napcat", "astrbot", "tavern"]
     if name not in templates:
         return redirect(url_for("index"))
-    return render_template(f"tutorial_{name}.html")
+    return render_template(f"tutorial_{name}.html",
+                           server_ip=config.get("server_ip", "你的服务器IP"),
+                           napcat_port=config.get("napcat_port", 6099),
+                           astrbot_port=config.get("astrbot_port", 6185),
+                           tavern_port=config.get("tavern_port", 18888))
+
+
+@app.route("/encyclopedia")
+@login_required
+def encyclopedia():
+    """百科全书已改为侧边栏组件，旧路由重定向到首页"""
+    return redirect(url_for("index"))
 
 
 # ========== 路由：服务管理 API ==========
@@ -1230,6 +1390,89 @@ def api_system_resources():
             "cpu": svc_info["cpu"],
         }
     return jsonify(result)
+
+
+# ========== 路由：错误报告 ==========
+
+@app.route("/api/system/error-report")
+@login_required
+def api_error_report():
+    """一键生成错误报告，包含设备信息、服务状态、安装进度、报错日志"""
+    report = {}
+    # 1. 系统信息
+    ok, os_info = run_command("cat /etc/os-release 2>/dev/null | head -5", quiet=True)
+    report["os"] = os_info.strip() if ok else "未知"
+    ok, arch = run_command("uname -m", quiet=True)
+    report["arch"] = arch.strip() if ok else "未知"
+    ok, kernel = run_command("uname -r", quiet=True)
+    report["kernel"] = kernel.strip() if ok else "未知"
+    ok, mem = run_command("free -h | grep Mem | awk '{print $2}'", quiet=True)
+    report["total_memory"] = mem.strip() if ok else "未知"
+    ok, disk = run_command("df -h / | tail -1 | awk '{print $2, $3, $4, $5}'", quiet=True)
+    report["disk"] = disk.strip() if ok else "未知"
+
+    # 2. 服务器 IP 属地
+    server_ip = config.get("server_ip", "")
+    report["server_ip"] = server_ip
+    if server_ip and server_ip != "你的服务器IP":
+        ok, region = run_command(f"curl -s --connect-timeout 3 'http://ip-api.com/json/{server_ip}?fields=country,regionName,city,isp&lang=zh-CN'", quiet=True)
+        report["ip_region"] = region.strip() if ok else "查询失败"
+    else:
+        report["ip_region"] = "未获取到IP"
+
+    # 3. 依赖安装状态
+    deps = {}
+    ok, out = run_command("docker --version", quiet=True)
+    deps["docker"] = out.strip() if ok else "未安装"
+    ok, out = run_command("node --version", quiet=True)
+    deps["nodejs"] = out.strip() if ok else "未安装"
+    ok, out = run_command("npm --version", quiet=True)
+    deps["npm"] = out.strip() if ok else "未安装"
+    ok, out = run_command("pm2 --version", quiet=True)
+    deps["pm2"] = out.strip() if ok else "未安装"
+    ok, out = run_command("git --version", quiet=True)
+    deps["git"] = out.strip() if ok else "未安装"
+    report["dependencies"] = deps
+
+    # 4. 各服务安装和运行状态
+    services_status = get_all_services_status()
+    svc_report = {}
+    for name, info in services_status.items():
+        svc_report[name] = {
+            "status": info.get("status", "unknown"),
+            "memory_mb": round(info.get("memory", 0) / 1024 / 1024, 1) if info.get("memory", 0) > 0 else 0
+        }
+    # 检查关键目录/文件是否存在
+    svc_report["astrbot_dir_exists"] = os.path.exists("/opt/astrbot")
+    svc_report["astrbot_yml_exists"] = os.path.exists("/opt/astrbot/astrbot.yml")
+    svc_report["sillytavern_dir_exists"] = os.path.exists("/opt/sillytavern")
+    svc_report["sillytavern_package_json"] = os.path.exists("/opt/sillytavern/package.json")
+    svc_report["sillytavern_node_modules"] = os.path.exists("/opt/sillytavern/node_modules")
+    report["services"] = svc_report
+
+    # 5. 安装进度和日志
+    report["install_stage"] = install_status.get("stage", "unknown")
+    report["install_progress"] = install_status.get("progress", 0)
+    report["install_message"] = install_status.get("message", "")
+    report["install_current_stage"] = install_status.get("current_stage", "")
+    # 最近50条日志
+    logs = install_status.get("logs", [])
+    report["recent_logs"] = logs[-50:] if len(logs) > 50 else logs
+
+    # 6. 配置信息（脱敏）
+    report["config"] = {
+        "installed": config.get("installed", False),
+        "astrbot_port": config.get("astrbot_port", 6185),
+        "napcat_port": config.get("napcat_port", 6099),
+        "tavern_port": config.get("tavern_port", 18888),
+        "install_tavern": config.get("install_tavern", True),
+        "install_astrbot": config.get("install_astrbot", True),
+    }
+
+    # 7. 夜鹭机版本
+    report["yolushiki_version"] = "v0.2"
+
+    return jsonify(report)
 
 
 # ========== 路由：安装 API（保留） ==========
@@ -1445,30 +1688,7 @@ def retry_current_stage():
 def _continue_sillytavern_config(tavern_dir):
     """SillyTavern npm安装后的配置步骤"""
     log("配置SillyTavern...")
-    config_content = f"""dataRoot: ./data
-listen: true
-listenAddress:
-  ipv4: 0.0.0.0
-  ipv6: '[::]'
-protocol:
-  ipv4: true
-  ipv6: false
-dnsPreferIPv6: false
-browserLaunch:
-  enabled: false
-  browser: 'default'
-  hostname: 'auto'
-  port: -1
-  avoidLocalhost: false
-port: {config['tavern_port']}
-whitelistMode: false
-basicAuthMode: false
-enableUserAccounts: true
-enableDiscreetLogin: false
-sessionTimeout: 86400
-securityOverride: true
-disableCsrfProtection: false
-"""
+    config_content = generate_tavern_config_yaml()
     config_path = os.path.join(tavern_dir, "config.yaml")
     with open(config_path, "w") as f:
         f.write(config_content)
@@ -1532,9 +1752,13 @@ def _finish_install(generation):
     install_status["progress"] = 95
     install_status["message"] = "保存配置..."
     server_ip = ""
-    ok, ip_out = run_command("hostname -I | awk '{print $1}'", quiet=True)
+    ok, ip_out = run_command("curl -s --connect-timeout 3 ifconfig.me || curl -s --connect-timeout 3 ip.sb", quiet=True)
     if ok and ip_out.strip():
         server_ip = ip_out.strip()
+    if not server_ip:
+        ok, ip_out = run_command("hostname -I | awk '{print $1}'", quiet=True)
+        if ok and ip_out.strip():
+            server_ip = ip_out.strip()
     if not server_ip:
         server_ip = "你的服务器IP"
     config["server_ip"] = server_ip

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夜鹭机 - 百科全书</title>
+    <link rel="icon" href="/static/logo.ico" type="image/x-icon">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-primary: #0a1628;
+            --bg-secondary: #0f1f3a;
+            --bg-card: rgba(255,255,255,0.04);
+            --text-primary: #e0e0e0;
+            --text-secondary: #8a9bb5;
+            --accent-blue: #4a8ecf;
+            --accent-green: #27ae60;
+            --accent-yellow: #d4a017;
+            --accent-red: #c0392b;
+            --border: rgba(255,255,255,0.08);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, #0d2137 100%);
+            min-height: 100vh; color: var(--text-primary);
+        }
+        .topbar {
+            background: rgba(0,0,0,0.3); backdrop-filter: blur(10px);
+            padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
+        }
+        .topbar-title { color: #fff; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .topbar-back { color: var(--accent-blue); text-decoration: none; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; }
+        .topbar-back:hover { color: #fff; }
+        .container { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+
+        .search-box {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 14px 18px; margin-bottom: 24px; display: flex; align-items: center; gap: 10px;
+        }
+        .search-box input {
+            background: transparent; border: none; outline: none; color: #fff;
+            font-size: 1rem; flex: 1; width: 100%;
+        }
+        .search-box input::placeholder { color: var(--text-secondary); }
+        .search-box i { color: var(--text-secondary); flex-shrink: 0; }
+
+        .category-tabs {
+            display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .cat-tab {
+            padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; cursor: pointer;
+            background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .cat-tab:hover, .cat-tab.active { background: rgba(74,142,207,0.15); color: var(--accent-blue); border-color: var(--accent-blue); }
+
+        .term-card {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+            margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s;
+        }
+        .term-card:hover { border-color: rgba(74,142,207,0.3); }
+        .term-header {
+            padding: 14px 18px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+        }
+        .term-header-left { display: flex; align-items: center; gap: 10px; }
+        .term-name { color: #fff; font-weight: 600; font-size: 0.95rem; }
+        .term-cat {
+            font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+            background: rgba(74,142,207,0.12); color: var(--accent-blue);
+        }
+        .term-brief { color: var(--text-secondary); font-size: 0.82rem; margin-top: 4px; }
+        .term-chevron { color: var(--text-secondary); transition: transform 0.2s; }
+        .term-card.open .term-chevron { transform: rotate(180deg); }
+        .term-detail {
+            display: none; padding: 0 18px 16px; font-size: 0.85rem; line-height: 1.7;
+            color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: 0;
+            padding-top: 14px;
+        }
+        .term-card.open .term-detail { display: block; }
+
+        .no-result {
+            text-align: center; padding: 40px 20px; color: var(--text-secondary);
+        }
+        .no-result i { margin-bottom: 12px; opacity: 0.4; }
+
+        .stats { text-align: center; color: var(--text-secondary); font-size: 0.75rem; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-title">
+            <i data-lucide="book-open" style="width:18px;height:18px;"></i> 夜鹭机百科全书
+        </div>
+        <a href="/" class="topbar-back">
+            <i data-lucide="arrow-left" style="width:14px;height:14px;"></i> 返回管理面板
+        </a>
+    </div>
+
+    <div class="container">
+        <div class="search-box">
+            <i data-lucide="search" style="width:18px;height:18px;"></i>
+            <input type="text" id="search-input" placeholder="搜索术语、概念或问题..." oninput="filterTerms()">
+        </div>
+
+        <div class="category-tabs" id="cat-tabs"></div>
+
+        <div id="terms-list"></div>
+
+        <div class="no-result" id="no-result" style="display:none;">
+            <i data-lucide="search-x" style="width:40px;height:40px;"></i>
+            <p>没有找到匹配的词条</p>
+        </div>
+
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <script>
+        let allTerms = [];
+        let activeCategory = '';
+
+        async function loadData() {
+            try {
+                const resp = await fetch('/static/encyclopedia.json');
+                const data = await resp.json();
+                allTerms = data.terms || [];
+                renderCategories();
+                renderTerms(allTerms);
+                document.getElementById('stats').textContent = '共 ' + allTerms.length + ' 个词条';
+            } catch(e) {
+                document.getElementById('terms-list').innerHTML = '<div class="no-result"><p>加载数据失败</p></div>';
+            }
+        }
+
+        function renderCategories() {
+            const cats = [...new Set(allTerms.map(t => t.category))];
+            const tabs = document.getElementById('cat-tabs');
+            tabs.innerHTML = '<div class="cat-tab active" onclick="setCategory(\'\')">全部</div>' +
+                cats.map(c => '<div class="cat-tab" onclick="setCategory(\'' + c + '\')">' + c + '</div>').join('');
+        }
+
+        function setCategory(cat) {
+            activeCategory = cat;
+            document.querySelectorAll('.cat-tab').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            filterTerms();
+        }
+
+        function filterTerms() {
+            const query = document.getElementById('search-input').value.trim().toLowerCase();
+            let filtered = allTerms;
+            if (activeCategory) {
+                filtered = filtered.filter(t => t.category === activeCategory);
+            }
+            if (query) {
+                filtered = filtered.filter(t =>
+                    t.term.toLowerCase().includes(query) ||
+                    t.brief.toLowerCase().includes(query) ||
+                    t.detail.toLowerCase().includes(query) ||
+                    t.category.toLowerCase().includes(query)
+                );
+            }
+            renderTerms(filtered);
+            document.getElementById('no-result').style.display = filtered.length === 0 ? 'block' : 'none';
+        }
+
+        function renderTerms(terms) {
+            const list = document.getElementById('terms-list');
+            list.innerHTML = terms.map(t => `
+                <div class="term-card" id="term-${t.id}">
+                    <div class="term-header" onclick="toggleTerm('${t.id}')">
+                        <div>
+                            <div class="term-header-left">
+                                <span class="term-name">${t.term}</span>
+                                <span class="term-cat">${t.category}</span>
+                            </div>
+                            <div class="term-brief">${t.brief}</div>
+                        </div>
+                        <i data-lucide="chevron-down" class="term-chevron" style="width:16px;height:16px;flex-shrink:0;"></i>
+                    </div>
+                    <div class="term-detail">${t.detail.replace(/\n/g, '<br>')}</div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function toggleTerm(id) {
+            const card = document.getElementById('term-' + id);
+            card.classList.toggle('open');
+        }
+
+        loadData();
+        lucide.createIcons();
+    </script>
+</body>
+</html>

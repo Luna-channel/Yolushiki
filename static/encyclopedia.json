@@ -1,0 +1,375 @@
+
+{
+  "announcements": [
+    {
+      "id": 1,
+      "title": "免费分享声明",
+      "pinned": true,
+      "content": [
+        "夜鹭机为免费分享，作者：Luna_Dol，禁止倒卖。",
+        "如果你在任何渠道购买了夜鹭机，凭退款+举报截图联系小红书 @柯尔速递 领取免费1对1技术支持。",
+        "本内容可二传、二改，但禁止除作者本人外上传至DC中文酒馆社区。"
+      ]
+    }
+  ],
+  "categories": ["入门科普", "原理", "依赖工具", "常见问题", "排错技巧"],
+  "terms": [
+    {
+      "id": "what-is-server",
+      "term": "什么是服务器？我需要买吗？",
+      "category": "入门科普",
+      "brief": "服务器就是一台24小时开机的远程电脑，你需要租一台。",
+      "detail": "服务器就是一台放在机房里、24小时开机、有公网 IP 的电脑。你的 SillyTavern、QQ 机器人等服务都运行在这台电脑上，这样你关掉自己的电脑，这些服务也不会停。\n\n你不需要买实体服务器，而是从云服务商那里租一台虚拟的：\n- 腾讯云轻量应用服务器：约 50-100 元/月\n- 阿里云 ECS：约 50-100 元/月\n- 其他：华为云、Vultr、搬瓦工等\n\n推荐配置：\n- CPU：2核\n- 内存：2GB（最低）/ 4GB（推荐）\n- 硬盘：40GB 以上\n- 系统：Ubuntu 22.04（推荐）或 Debian 12\n- 带宽：3Mbps 以上\n\n注意：不要选 Windows 系统！夜鹭机只支持 Linux。"
+    },
+    {
+      "id": "what-is-linux",
+      "term": "什么是 Linux？",
+      "category": "入门科普",
+      "brief": "服务器用的操作系统，类似 Windows 但没有桌面。",
+      "detail": "Linux 是一种操作系统，就像 Windows 和 macOS 一样。区别是 Linux 通常没有图形桌面，你需要通过终端输入命令来操作它。\n\n绝大多数服务器都使用 Linux，因为它免费、稳定、省资源。\n\n常见的 Linux 版本：\n- Ubuntu（最推荐，教程最多，新手最友好）\n- Debian（稳定，和 Ubuntu 类似）\n- CentOS（较老，不推荐新手用）\n\n夜鹭机支持以上所有版本，但最推荐 Ubuntu 22.04。\n\n你不需要学会 Linux！夜鹭机帮你把所有命令行操作都自动化了。你只需要能打开终端、粘贴一行命令就行。"
+    },
+    {
+      "id": "what-is-terminal",
+      "term": "什么是终端？怎么打开？",
+      "category": "入门科普",
+      "brief": "输入命令的黑色窗口，通过 SSH 工具连接服务器使用。",
+      "detail": "终端就是一个输入文字命令的窗口，通常是黑底白字或深色背景。你在终端里输入命令，按回车，服务器就会执行。\n\n怎么打开终端：\n\n方法一：用 1Panel 或宝塔面板\n在浏览器打开面板管理页面，找到「终端」功能，直接在网页里用。这是最简单的方式。\n\n方法二：用 SSH 工具\n下载 Termius 或 FinalShell，输入服务器 IP、用户名（通常是 root）和密码，点连接。连上后就是终端了。\n\n在终端里粘贴命令的方式：\n- 1Panel/宝塔终端：Ctrl+V\n- Termius：右键粘贴\n- Windows CMD/PowerShell：右键粘贴\n- Mac 终端：Cmd+V"
+    },
+    {
+      "id": "what-is-ssh",
+      "term": "什么是 SSH？",
+      "category": "入门科普",
+      "brief": "远程连接服务器的安全通道。",
+      "detail": "SSH 是一种远程连接协议。简单说，它让你坐在家里，用自己的电脑通过网络操作远在机房的服务器。\n\n连接 SSH 需要三样东西：\n1. 服务器的公网 IP 地址\n2. 用户名（一般是 root）\n3. 密码（购买服务器时设置的）\n\n如果你用的是 1Panel 或宝塔面板，它们自带网页终端，你甚至不需要单独的 SSH 工具。\n\n安全提示：不要把 SSH 密码告诉别人！有了它就能完全控制你的服务器。"
+    },
+    {
+      "id": "what-is-sillytavern",
+      "term": "SillyTavern（云酒馆）是什么？",
+      "category": "入门科普",
+      "brief": "一个网页版的 AI 角色扮演聊天前端。",
+      "detail": "SillyTavern 是一个开源的网页聊天界面，专门为 AI 角色扮演设计。你可以：\n- 导入角色卡，和 AI 扮演的角色对话\n- 连接各种 AI 接口（OpenAI、Claude、本地模型等）\n- 自定义聊天格式、世界观、提示词\n- 管理多个对话和角色\n\n把它部署在服务器上（即「云酒馆」）的好处：\n- 手机、电脑、平板都能用，只要有浏览器\n- 24小时在线，不用开电脑\n- 聊天记录保存在服务器上，不怕丢\n\n注意：SillyTavern 本身不包含 AI，它只是一个界面。你需要自己准备 AI 接口（API Key），比如 OpenAI、Claude 的付费接口。"
+    },
+    {
+      "id": "what-is-astrbot",
+      "term": "AstrBot 是什么？",
+      "category": "入门科普",
+      "brief": "一个 QQ 机器人框架，用来让 AI 在 QQ 里回复消息。",
+      "detail": "AstrBot 是一个 QQ 机器人框架。配置好之后，别人在 QQ 里 @你的机器人或私聊它，它就会调用 AI 接口生成回复。\n\n它能做什么：\n- 在 QQ 群里自动回复消息\n- 私聊对话\n- 支持多种 AI 接口\n- 支持插件扩展功能\n\nAstrBot 运行在 Docker 容器里，由夜鹭机自动管理。\n\n如果你不需要 QQ 机器人功能，安装时可以不勾选 AstrBot。"
+    },
+    {
+      "id": "what-is-napcat",
+      "term": "NapCat 是什么？",
+      "category": "入门科普",
+      "brief": "QQ 的协议端，让 AstrBot 能收发 QQ 消息。",
+      "detail": "NapCat 是 QQ 的协议端。简单说：\n- AstrBot 负责「想」（调用 AI 生成回复）\n- NapCat 负责「说和听」（实际收发 QQ 消息）\n\n它们配合工作：NapCat 收到 QQ 消息 → 转发给 AstrBot → AstrBot 生成回复 → 通过 NapCat 发回 QQ。\n\n使用前你需要用 QQ 扫码登录 NapCat。建议用小号，不要用主 QQ 号，以防腾讯风控。"
+    },
+    {
+      "id": "what-is-api",
+      "term": "什么是 API / API Key？",
+      "category": "入门科普",
+      "brief": "AI 服务的「通行证」，用来调用 AI 生成回复。",
+      "detail": "API 是软件之间通信的接口。AI API 就是一个网址，你把问题发过去，它把 AI 的回答发回来。\n\nAPI Key（密钥）就是你的通行证，有了它就能调用 AI 服务。就像银行卡号+密码。\n\n怎么获取 API Key：\n- OpenAI：注册 platform.openai.com，在 API Keys 页面创建\n- Claude：注册 console.anthropic.com，创建 API Key\n- 国内中转：很多第三方提供更便宜的 API 中转服务\n\n在哪里填 API Key：\n- SillyTavern：设置里的 API 连接\n- AstrBot：AstrBot 管理页面的配置中\n\n安全提示：API Key 不要泄露！谁有你的 Key 就能用你的余额。"
+    },
+    {
+      "id": "mirror-acceleration",
+      "term": "镜像加速是什么？怎么用？",
+      "category": "入门科普",
+      "brief": "把国外的下载地址换成国内的，加快下载速度。",
+      "detail": "安装时需要从国外下载很多东西，在国内访问这些国外资源通常很慢。\n\n镜像加速就是把下载地址从国外换成国内的镜像站，这样下载速度会快很多。\n\n怎么用：安装过程中，如果进度条长时间不动，安装页面下方会出现「网络加速选项」，点对应的加速按钮即可。\n\n三种加速：\n1. Docker 镜像加速：加快 AstrBot/NapCat 的下载\n2. GitHub 加速：加快 SillyTavern 代码的下载\n3. npm 镜像加速：加快 SillyTavern 依赖包的安装\n\n点击后会自动切换并重试，不需要从头开始安装。"
+    },
+    {
+      "id": "what-is-yolushiki",
+      "term": "夜鹭机是什么？",
+      "category": "原理",
+      "brief": "一个把云酒馆、QQ机器人等服务打包好的一键安装工具。",
+      "detail": "夜鹭机并不是一个软件，它是一个安装工具。它的作用是把 SillyTavern（云酒馆）、AstrBot（QQ机器人）、NapCat（QQ协议端）这些本来需要分别安装、分别配置的东西，全部打包在一起，用一个网页界面帮你全自动安装和管理。\n\n类比：就像你买了一台新电脑，正常情况需要自己装系统、装驱动、装软件，夜鹭机就是帮你把这些全部一次性搞定的工具。\n\n安装完成后，夜鹭机管理面板会常驻运行，方便你随时查看服务状态、重启服务、查看教程。"
+    },
+    {
+      "id": "how-it-works",
+      "term": "安装原理（一共做了什么）",
+      "category": "原理",
+      "brief": "自动安装依赖，拉取镜像和代码，部署服务。",
+      "detail": "安装分以下步骤：\n1. 运行 install.sh 脚本，检测服务器系统类型\n2. 自动安装基础依赖：Docker、Node.js、PM2、Git\n3. 启动网页管理面板（9999端口）\n4. 你在网页上填配置后，管理面板自动执行：\n   - 用 Docker 拉取 AstrBot 和 NapCat 镜像并启动容器\n   - 用 Git 下载 SillyTavern 代码\n   - 用 npm 安装 SillyTavern 的依赖包\n   - 用 PM2 启动并管理 SillyTavern\n5. 全部完成后显示仪表盘\n\n整个过程你只需要填几个表单，其他全自动完成。"
+    },
+    {
+      "id": "architecture",
+      "term": "各组件之间的关系",
+      "category": "原理",
+      "brief": "NapCat、AstrBot、SillyTavern 分别做什么。",
+      "detail": "各组件关系：\n\n手机QQ <-> NapCat（登录QQ，收发消息）<-> AstrBot（调用AI生成回复）<-> AI接口\n\n浏览器 <-> SillyTavern（网页聊天界面）<-> AI接口\n\n浏览器 <-> 夜鹭机管理面板（监控和管理以上所有服务）\n\n简单说：NapCat 负责连接 QQ，AstrBot 负责调用 AI，SillyTavern 是网页版聊天界面，夜鹭机管理面板负责管理它们。\n\n你不需要全部安装：只需要云酒馆可以不勾选 AstrBot；反过来也一样。"
+    },
+    {
+      "id": "port",
+      "term": "端口是什么？",
+      "category": "原理",
+      "brief": "服务器上的门牌号，不同的服务用不同的端口。",
+      "detail": "端口是用于区分不同服务的数字编号，范围 0-65535。就像一栋大楼的不同房间号。\n\n夜鹭机用到的端口：\n- 9999：夜鹭机管理面板\n- 6099：NapCat\n- 6185：AstrBot\n- 自定义：SillyTavern（安装时你自己填的）\n\n你需要在云服务商控制台（不是服务器里面！是腾讯云/阿里云的网页后台）的安全组里打开这些端口，别人才能从外面访问。\n\n常见错误：只在服务器内部用 ufw 开了端口，但没在云服务商控制台开，外网还是访问不了。"
+    },
+    {
+      "id": "file-paths",
+      "term": "文件都装在哪了？",
+      "category": "原理",
+      "brief": "夜鹭机在 /opt/yolushiki，其他服务在 /opt 下各自目录。",
+      "detail": "Linux 系统用 / 开头的路径（不是 C 盘），夜鹭机安装的文件位置：\n\n/opt/yolushiki/ — 管理面板\n  app.py（后端）、install.sh（安装脚本）、config.json（配置）\n\n/opt/astrbot/ — AstrBot + NapCat\n  astrbot.yml（Docker 编排）、data/（数据）\n\n/opt/sillytavern/ — SillyTavern 完整代码和数据\n\n如果需要备份聊天记录，备份 /opt/sillytavern 目录即可。"
+    },
+    {
+      "id": "docker-compose",
+      "term": "Docker Compose 是什么？",
+      "category": "原理",
+      "brief": "用一个配置文件同时管理多个 Docker 容器。",
+      "detail": "Docker Compose 是 Docker 的批量管理工具。夜鹭机用它同时启动和管理 AstrBot 和 NapCat 两个容器。\n\n配置文件是 /opt/astrbot/astrbot.yml，里面定义了容器的镜像、端口、内存限制等。\n\n你不需要手动编辑这个文件，夜鹭机会自动生成和管理。"
+    },
+    {
+      "id": "docker",
+      "term": "Docker",
+      "category": "依赖工具",
+      "brief": "一种容器技术，让软件在隔离的环境中运行。",
+      "detail": "Docker 就像独立的小房间，每个软件住在自己的房间里互不干扰。AstrBot 和 NapCat 都运行在 Docker 容器中。\n\n你不需要直接操作 Docker，夜鹭机会帮你管理。如果看到报错中有 docker 字样，通常是镜像下载失败（网络问题）或服务器内存不足。\n\n常用 Docker 命令（一般不需要手动用）：\n- docker ps：查看运行中的容器\n- docker ps -a：查看所有容器\n- docker logs 容器名：查看容器日志\n- docker restart 容器名：重启容器"
+    },
+    {
+      "id": "docker-image",
+      "term": "Docker 镜像",
+      "category": "依赖工具",
+      "brief": "软件的安装包，Docker 用它来创建容器。",
+      "detail": "镜像是打包好的软件模板，类似 .exe 安装包。安装时需要从网上下载。\n\n夜鹭机用到的镜像：\n- mlikiowa/napcat-docker（NapCat）\n- soulter/astrbot（AstrBot）\n\n下载慢的话在安装界面点镜像加速按钮切换到国内源。"
+    },
+    {
+      "id": "nodejs",
+      "term": "Node.js",
+      "category": "依赖工具",
+      "brief": "JavaScript 运行环境，SillyTavern 需要它来运行。",
+      "detail": "Node.js 让 JavaScript 代码可以在服务器上运行。SillyTavern 就是用 Node.js 运行的。\n\n安装夜鹭机时会自动安装 Node.js 20.x 版本，你不需要手动操作。\n\n如果遇到 node 或 npm 相关报错，可能是 Node.js 安装不完整。在终端运行 node -v 查看版本，如果报错说明没装好，重新运行安装脚本即可。"
+    },
+    {
+      "id": "npm",
+      "term": "npm",
+      "category": "依赖工具",
+      "brief": "Node.js 的包管理器，用来安装 SillyTavern 的依赖。",
+      "detail": "npm 是 Node.js 的应用商店。SillyTavern 需要很多小组件（依赖包），npm 负责全部下载安装好。\n\nnpm install 失败通常是网络问题，在安装界面点镜像加速切换到淘宝 npm 镜像。\n\n注意：npm install 时看到黄色 WARN 警告是正常的，只要没有红色 ERR 就不用担心。安装时间通常 2-10 分钟。"
+    },
+    {
+      "id": "pm2",
+      "term": "PM2",
+      "category": "依赖工具",
+      "brief": "进程管理器，让服务在后台持续运行。",
+      "detail": "PM2 就像一个管家，负责看管服务：\n- SillyTavern 崩溃了，PM2 自动重启\n- 服务器重启了，PM2 自动恢复所有服务\n\n夜鹭机管理面板和 SillyTavern 都由 PM2 管理。\n\n常用命令（一般不需要手动用）：\n- pm2 list：查看所有服务状态\n- pm2 restart 服务名：重启服务\n- pm2 logs 服务名：查看日志\n- pm2 logs 服务名 --lines 50：查看最近50行日志"
+    },
+    {
+      "id": "git",
+      "term": "Git",
+      "category": "依赖工具",
+      "brief": "代码下载工具，用来从 GitHub 下载 SillyTavern。",
+      "detail": "夜鹭机用 Git 从 GitHub 下载 SillyTavern 的最新代码。\n\n如果安装时显示 git clone 失败，是因为国内无法直接访问 GitHub，在安装界面点 GitHub 加速按钮即可。\n\nGitHub 是全球最大的代码托管平台，国内访问可能很慢甚至打不开，使用加速代理即可解决。"
+    },
+    {
+      "id": "cant-open-page",
+      "term": "打不开管理面板页面",
+      "category": "常见问题",
+      "brief": "检查端口、IP、防火墙三件套。",
+      "detail": "打不开页面的原因按概率排序：\n\n1. 端口没放行（最常见！）：去云服务商控制台，在安全组里添加 9999 端口\n2. IP 不对：确认是公网 IP，不是 192.168 或 10.0 开头的\n3. 安装脚本没运行完：回终端看看有没有报错\n4. 地址打错了：确认是 http:// 不是 https://\n5. 防火墙拦截：在服务器内运行 ufw allow 9999/tcp\n\n排查方法：在终端运行 curl localhost:9999\n- 有输出 = 服务在跑，问题在网络/端口\n- 无输出 = 服务没启动，运行 bash /opt/yolushiki/install.sh"
+    },
+    {
+      "id": "install-slow",
+      "term": "安装速度很慢或卡住了",
+      "category": "常见问题",
+      "brief": "使用镜像加速功能切换国内下载源。",
+      "detail": "国内服务器访问国外资源速度慢是正常的。\n\n解决方法：\n- Docker 拉取慢：安装界面点 Docker 镜像加速\n- git clone 慢：安装界面点 GitHub 加速\n- npm install 慢：安装界面点 npm 镜像加速\n\n点击后自动切换镜像并重试，不会重启整个安装。\n\n如果加速后还是很慢：\n- 可能是服务器带宽太小（1Mbps 确实慢）\n- 安装高峰期镜像站也可能慢\n- 整个安装过程通常 5-20 分钟"
+    },
+    {
+      "id": "napcat-scan-fail",
+      "term": "NapCat 扫码登录失败",
+      "category": "常见问题",
+      "brief": "二维码过期、异地登录风控、网络问题。",
+      "detail": "扫码失败常见原因：\n\n1. 二维码过期：刷新 NapCat 管理页面重新扫\n2. 异地登录风控：你的 QQ 从没在服务器所在地登录过，腾讯可能拦截\n3. 账号限制：新注册/长期未用的 QQ 号容易被风控，换个活跃的号试试\n4. 手机 QQ 版本太老：更新到最新版\n\n解决风控：先用手机 QQ 在设置->账号安全->登录设备管理里操作。\n\n提示：扫码时手机和服务器不需要在同一个网络。建议使用小号登录。"
+    },
+    {
+      "id": "tavern-cant-open",
+      "term": "SillyTavern 打不开",
+      "category": "常见问题",
+      "brief": "检查服务状态、端口放行。",
+      "detail": "1. 在管理面板检查 SillyTavern 服务状态是否为运行中\n2. 如果显示已停止，点重启按钮\n3. 确认在云服务商控制台开放了 SillyTavern 的端口\n4. 确认地址格式正确：http://你的IP:你设置的端口\n\n注意：是 http 不是 https！加了 s 就打不开。\n\n如果显示运行中但还是打不开：\n- 确认端口号没搞混\n- 试试清除浏览器缓存\n- 用手机浏览器试试看是不是电脑网络的问题"
+    },
+    {
+      "id": "memory-issue",
+      "term": "服务器内存不足 / 服务频繁崩溃",
+      "category": "常见问题",
+      "brief": "2G 内存可能不够，建议 4G 以上。",
+      "detail": "夜鹭机全部服务运行时的内存需求：\n- NapCat：约 200-400MB\n- AstrBot：约 200-500MB（已限制最大 512MB）\n- SillyTavern：约 100-200MB\n- 系统本身：约 500MB\n- 管理面板：约 50MB\n\n总计建议至少 2GB，推荐 4GB。\n\n只有 2GB 内存：建议只装你需要的服务，不要全装。\n\n频繁崩溃（日志里有 OOM Killed）：在管理面板查看内存占用，考虑升级配置或减少服务。"
+    },
+    {
+      "id": "disk-space",
+      "term": "磁盘空间不足",
+      "category": "常见问题",
+      "brief": "Docker 镜像和日志可能占满磁盘。",
+      "detail": "如果看到 No space left on device 错误，说明磁盘满了。\n\n查看磁盘：在终端运行 df -h\n\n清理方法：\n1. 清理 Docker 无用数据：docker system prune -f\n2. 清理系统日志：journalctl --vacuum-size=100M\n3. 查看大文件：du -sh /opt/*\n\n建议服务器至少 40GB 硬盘空间。"
+    },
+    {
+      "id": "what-is-token",
+      "term": "Token / 访问令牌是什么？",
+      "category": "常见问题",
+      "brief": "管理面板的登录密码。",
+      "detail": "Token 就是管理面板的登录密码，首次打开时会让你设置。\n\n忘记 Token：在服务器终端运行 cat /opt/yolushiki/config.json，里面的 token 字段就是你的访问令牌。\n\n修改 Token：在管理面板仪表盘找到「重置登录 Token」卡片。\n\n注意：Token 是明文存储的（因为是本地管理工具），不要把 config.json 分享给别人。"
+    },
+    {
+      "id": "http-vs-https",
+      "term": "为什么要用 http 不能用 https？",
+      "category": "常见问题",
+      "brief": "夜鹭机没有 SSL 证书，必须用 http 访问。",
+      "detail": "https 需要 SSL 证书，夜鹭机的各个服务都没有配置证书，所以必须用 http:// 开头的地址访问。\n\n如果浏览器自动跳转到 https 然后打不开：\n1. 手动把地址栏的 https 改成 http\n2. 或者用无痕/隐私模式打开\n3. 有些浏览器会强制 https，输入完整的 http://IP:端口\n\n安全说明：管理面板是你自己用的，用 http 在公网上风险很低。"
+    },
+    {
+      "id": "public-vs-private-ip",
+      "term": "公网 IP 和内网 IP 的区别",
+      "category": "常见问题",
+      "brief": "192.168 / 10.0 开头的是内网 IP，不能从外面访问。",
+      "detail": "公网 IP：全世界都能访问，比如 43.156.xx.xx\n内网 IP：只有局域网内才能访问，通常以 192.168、10.0、172.16 开头\n\n你在浏览器里输入的必须是公网 IP。\n\n怎么查公网 IP：\n- 在云服务商控制台看\n- 在管理面板仪表盘的系统信息中查看\n- 在终端运行：curl ifconfig.me\n\n注意：家里的电脑通常没有公网 IP，所以需要用云服务器。"
+    },
+    {
+      "id": "security-group",
+      "term": "什么是安全组？怎么开端口？",
+      "category": "常见问题",
+      "brief": "云服务商控制台里的防火墙设置，需要手动开放端口。",
+      "detail": "安全组 = 云服务商的网络防火墙。默认大部分端口关闭，需要手动开放。\n\n以腾讯云为例：\n1. 登录腾讯云控制台\n2. 找到你的服务器\n3. 点安全组 -> 入站规则 -> 添加规则\n4. 协议选 TCP，端口填 9999,6099,6185（逗号隔开），再加 SillyTavern 端口\n5. 来源填 0.0.0.0/0\n6. 保存\n\n阿里云、华为云操作类似。\n\n宝塔面板用户：在宝塔的安全页面也可以放行端口，但建议在云服务商控制台也开一遍。\n1Panel 用户：在 1Panel 的防火墙中也可以管理端口。"
+    },
+    {
+      "id": "reinstall",
+      "term": "怎么重新安装？",
+      "category": "常见问题",
+      "brief": "用管理面板的卸载功能清理后重新运行安装脚本。",
+      "detail": "方法一（推荐）：\n在管理面板找到卸载/清理卡片，勾选要清理的内容，点确认。然后运行：\nbash /opt/yolushiki/install.sh\n\n方法二（手动）：\ndocker compose -f /opt/astrbot/astrbot.yml down\npm2 delete all\nrm -rf /opt/astrbot /opt/sillytavern /opt/yolushiki/config.json\nbash /opt/yolushiki/install.sh\n\n注意：删除数据前确认你不需要保留聊天记录和角色卡！\n\n只想重装某个服务的话，在管理面板只勾选需要重装的部分即可。"
+    },
+    {
+      "id": "restart-panel",
+      "term": "管理面板关了怎么重新打开？",
+      "category": "常见问题",
+      "brief": "正常情况会自动运行，如果没有就手动启动。",
+      "detail": "正常情况下，管理面板由 PM2 管理，服务器重启后也会自动恢复。\n\n如果没有自动启动：\nbash /opt/yolushiki/install.sh\n\n如果 PM2 服务异常：\ncd /opt/yolushiki && pm2 start app.py --name yolushiki --interpreter python3\n\n检查是否在运行：\npm2 list（看 yolushiki 那一行状态是不是 online）"
+    },
+    {
+      "id": "backup-data",
+      "term": "怎么备份聊天记录和角色卡？",
+      "category": "常见问题",
+      "brief": "备份 /opt/sillytavern 目录即可。",
+      "detail": "SillyTavern 的所有数据都在 /opt/sillytavern 目录下。\n\n备份方法：\n\n用 1Panel 或宝塔的文件管理器：\n1. 打开文件页面\n2. 导航到 /opt/sillytavern\n3. 选中整个文件夹，点压缩\n4. 把压缩包下载到本地保存\n\n用命令行：\ntar -czf /root/st-backup.tar.gz /opt/sillytavern\n然后用 SFTP 工具下载压缩包。\n\nAstrBot 数据在 /opt/astrbot 目录，备份方法相同。"
+    },
+    {
+      "id": "update-services",
+      "term": "怎么更新 SillyTavern / AstrBot？",
+      "category": "常见问题",
+      "brief": "通过命令更新或重新安装。",
+      "detail": "更新 SillyTavern：\ncd /opt/sillytavern && git pull\npm2 restart sillytavern\n\n更新 AstrBot/NapCat：\ndocker compose -f /opt/astrbot/astrbot.yml pull\ndocker compose -f /opt/astrbot/astrbot.yml up -d\n\n简单方法：在管理面板用卸载/清理功能清理相应服务（不勾选删除数据），然后重新安装，数据会保留。\n\n更新前建议先备份数据。"
+    },
+    {
+      "id": "how-to-copy-log",
+      "term": "怎么复制日志给别人排查？",
+      "category": "排错技巧",
+      "brief": "使用管理面板的「一键生成错误报告」功能。",
+      "detail": "最简单的方法：\n\n在管理面板仪表盘找到故障排查卡片，点一键生成错误报告。系统会自动收集系统信息、服务状态、错误日志，打包成文本。点复制后粘贴给开发者或 AI。\n\n手动方法（管理面板打不开时）：\n在终端逐个运行以下命令，复制输出：\n\nuname -a && free -h && df -h\ndocker ps -a\ndocker logs napcat --tail 50\ndocker logs astrbot --tail 50\npm2 logs sillytavern --lines 50\npm2 logs yolushiki --lines 50\n\n把所有输出复制到一个文本里发出去。"
+    },
+    {
+      "id": "how-to-ask-ai",
+      "term": "怎么让 AI 帮你排查问题？",
+      "category": "排错技巧",
+      "brief": "复制错误报告，粘贴给 AI，描述你做了什么。",
+      "detail": "步骤：\n1. 在管理面板点一键生成错误报告，复制内容\n2. 打开任意 AI（ChatGPT、Claude、豆包、通义千问等）\n3. 粘贴报告，然后描述问题\n\n描述时要说清楚：\n- 你正在做什么（安装？配置？正常使用？）\n- 什么时候开始出问题的\n- 具体表现（打不开？报错？卡住？白屏？）\n- 已经试过什么\n\n示例提问：\n我在用夜鹭机部署服务，以下是错误报告：\n[粘贴报告]\n问题：安装到拉取 Docker 镜像时卡了 15 分钟，切了镜像加速也没用。请帮我分析。\n\n越详细，AI 越能帮到你。"
+    },
+    {
+      "id": "common-errors",
+      "term": "常见报错信息解读",
+      "category": "排错技巧",
+      "brief": "看到英文报错不要慌，这里解释常见的几种。",
+      "detail": "常见报错：\n\nConnection refused / 连接被拒绝\n= 服务没启动，或端口没开。检查服务状态和端口放行。\n\nConnection timed out / 连接超时\n= 网络不通。检查 IP 是否正确、端口是否放行。\n\nPermission denied / 权限不足\n= 需要用 root 用户运行。在命令前加 sudo。\n\nNo space left on device / 磁盘空间不足\n= 硬盘满了。运行 docker system prune -f 清理。\n\nOOM Killed / out of memory\n= 内存不够。升级配置或减少服务。\n\ncommand not found / 命令未找到\n= 某个工具没装好。重新运行安装脚本。\n\nEACCES / EPERM\n= 文件权限问题。用 root 用户运行。"
+    },
+    {
+      "id": "dont-panic",
+      "term": "遇到问题了怎么办？不要慌！",
+      "category": "排错技巧",
+      "brief": "大部分问题都是网络或端口导致的，按步骤排查即可。",
+      "detail": "遇到问题时的排查顺序：\n\n1. 先看管理面板的服务状态（如果能打开的话）\n2. 如果管理面板打不开，检查端口+IP+http\n3. 如果安装失败，试试镜像加速\n4. 如果服务崩溃，检查内存（free -h）和磁盘（df -h）\n5. 以上都不行，用一键错误报告或手动复制日志，发给 AI 或开发者\n\n记住：\n- 90% 的问题是端口没放行或 IP 搞错了\n- 8% 的问题是网络慢需要镜像加速\n- 2% 是真正的 bug\n\n不要自己乱改文件或运行不认识的命令！先询问再操作。"
+    },
+    {
+      "id": "what-is-character-card",
+      "term": "什么是角色卡？怎么导入？",
+      "category": "入门科普",
+      "brief": "AI 角色的人设文件，拖进 SillyTavern 就能用。",
+      "detail": "角色卡是一个包含 AI 角色人设信息的文件，通常是 .png 图片（图片里嵌入了人设数据）或 .json 文件。\n\n角色卡里包含：\n- 角色名字、头像\n- 角色性格、背景故事\n- 开场白（第一条消息）\n- 对 AI 的行为指令\n\n怎么导入：\n1. 打开 SillyTavern 网页\n2. 点左上角的角色管理图标\n3. 点导入按钮，选择角色卡文件\n4. 或者直接把文件拖进聊天界面\n\n去哪找角色卡：\n- Chub.ai：最大的角色卡分享平台\n- 各种社区群分享\n- 自己制作（在 SillyTavern 里点新建角色）\n\n注意：角色卡本身不包含 AI，它只是告诉 AI「你要扮演谁」。你还是需要配置好 API 接口才能聊天。"
+    },
+    {
+      "id": "what-is-preset",
+      "term": "什么是预设（Preset）？",
+      "category": "入门科普",
+      "brief": "控制 AI 行为的提示词模板，决定 AI 回复风格。",
+      "detail": "预设（Preset）是一套提示词模板，它决定了 AI 回复的风格和质量。可以理解为给 AI 的「行为规范」。\n\n预设影响什么：\n- AI 回复的长度（长文 vs 短文）\n- AI 的表达风格（文学 vs 口语）\n- AI 是否遵守角色设定\n- AI 对敏感内容的处理方式\n\n在哪设置：\nSillyTavern 顶栏 → 点 AI 图标 → 选择预设\n\n怎么获取好的预设：\n- SillyTavern 自带几个默认预设\n- 社区分享的预设（通常在角色卡分享的同一个地方）\n- 不同的 AI 模型适合不同的预设\n\n新手建议：先用默认预设，如果觉得 AI 回复不好，再换社区推荐的。预设选错了不会损坏任何东西，随时可以切换。"
+    },
+    {
+      "id": "how-to-choose-model",
+      "term": "该选什么 AI 模型？免费的还是付费的？",
+      "category": "入门科普",
+      "brief": "Claude 效果最好但贵，国内中转更便宜，没有免费午餐。",
+      "detail": "AI 模型选择指南：\n\n效果排名（角色扮演场景）：\n1. Claude 3.5 Sonnet / Claude 3 Opus — 效果最好，回复最自然\n2. GPT-4o — 效果好，但角色扮演不如 Claude\n3. GPT-3.5 / 国产模型 — 便宜但效果一般\n\n费用参考：\n- Claude API 官方：约 0.5-2 元/次对话（看长度）\n- GPT-4o：约 0.3-1 元/次对话\n- 国内中转 API：通常是官方价的 3-7 折\n- 完全免费的 AI：基本不存在好用的，免费模型回复质量很差\n\n怎么选：\n- 预算充足：直接用 Claude，体验最好\n- 想省钱：找国内中转 API，性价比高\n- 只想体验：先用便宜的模型试试，觉得值再升级\n\n注意：API 费用是按使用量计费的，聊得越多越贵。长对话会消耗更多 Token（AI 的计费单位）。"
+    },
+    {
+      "id": "mobile-access",
+      "term": "手机怎么访问云酒馆？",
+      "category": "常见问题",
+      "brief": "手机浏览器输入 http://IP:端口 即可，建议添加到主屏幕。",
+      "detail": "手机访问云酒馆非常简单：\n\n1. 打开手机浏览器（Safari、Chrome、系统自带都行）\n2. 地址栏输入 http://你的服务器IP:SillyTavern端口\n3. 就能看到 SillyTavern 界面了\n\n添加到主屏幕（像 App 一样用）：\n- iPhone：Safari 打开 → 点分享按钮 → 添加到主屏幕\n- Android：Chrome 打开 → 点右上角菜单 → 添加到主屏幕\n\n常见问题：\n- 打不开：确认用的是 http 不是 https\n- 界面显示不全：SillyTavern 对手机适配还行，横屏体验更好\n- 手机和电脑能同时用：可以，数据是同步的\n\n注意：手机必须能上网（4G/5G/WiFi 都行），不需要和服务器在同一个网络。"
+    },
+    {
+      "id": "multi-user",
+      "term": "多人能同时用云酒馆吗？",
+      "category": "常见问题",
+      "brief": "可以，但每个人的聊天记录共享同一个账号，建议开多用户模式。",
+      "detail": "默认情况下，所有人访问同一个地址，看到的是同一份数据（角色卡、聊天记录等）。这意味着你和朋友会互相看到对方的聊天。\n\n解决方案 — 开启多用户模式：\nSillyTavern 1.12+ 支持多用户，每个人有独立的数据空间。\n\n怎么开：\n1. 打开 SillyTavern 网页\n2. 如果版本支持，首页会显示用户选择界面\n3. 每个人创建自己的用户名即可\n\n注意事项：\n- 多用户模式下，每个人的角色卡和聊天记录互相隔离\n- API Key 是共享的（你配置一次，所有人都能用）\n- 这意味着 API 费用由你承担\n- 如果不想别人乱花你的 API 额度，可以设置 SillyTavern 的访问密码"
+    },
+    {
+      "id": "install-interrupted",
+      "term": "安装到一半断网/关了终端怎么办？",
+      "category": "常见问题",
+      "brief": "重新运行安装脚本即可，已完成的步骤会自动跳过。",
+      "detail": "不用慌！安装中断是很常见的情况。\n\n处理方法：\n重新运行安装脚本即可：\nbash /opt/yolushiki/install.sh\n\n脚本会自动检测已经完成的步骤并跳过，不会从头开始。\n\n哪些情况会导致中断：\n- 断网了\n- 关闭了终端窗口（SSH 断开）\n- 服务器重启了\n- 不小心按了 Ctrl+C\n\n预防方法：\n- 如果用 1Panel/宝塔的网页终端，关闭浏览器不会中断\n- 如果用 SSH 工具，断开连接会中断正在运行的命令\n- 高级用户可以用 screen 或 tmux 命令防止中断\n\n安装中断不会损坏已安装的东西，放心重新运行就好。"
+    },
+    {
+      "id": "qq-bot-risk-control",
+      "term": "QQ 机器人被风控/冻结了怎么办？",
+      "category": "常见问题",
+      "brief": "用小号、控制发言频率、申诉解封。",
+      "detail": "腾讯对 QQ 机器人行为有风控机制，可能会限制或冻结账号。\n\n常见风控表现：\n- 消息发不出去\n- 被禁言\n- 账号被冻结/临时限制\n- 提示「操作频繁」\n\n解决方法：\n1. 被临时限制：等几个小时到一天，通常会自动解除\n2. 被冻结：去 QQ 安全中心申诉解封\n3. 频繁触发：降低发言频率，不要在大群里频繁回复\n\n预防措施：\n- 一定要用小号！不要用主 QQ 号\n- 小号先正常使用几天再挂机器人（养号）\n- 控制回复频率，不要秒回\n- 避免发送重复内容\n- 不要在太多群里同时使用\n\n最坏情况：号被永久封了，换一个小号重新来。所以千万别用主号。"
+    },
+    {
+      "id": "server-expired",
+      "term": "服务器到期了数据会丢吗？",
+      "category": "常见问题",
+      "brief": "会！到期前必须备份或续费，过期太久数据会被清除。",
+      "detail": "云服务器到期后的处理：\n\n到期前：\n- 大部分云服务商会提前发短信/邮件提醒续费\n- 建议开通自动续费\n\n到期后：\n- 立即停机：服务器关机，所有服务停止\n- 保留期（通常 7 天）：数据还在，续费就能恢复\n- 过了保留期：数据被永久删除，无法恢复！\n\n怎么防止数据丢失：\n1. 开自动续费（最省心）\n2. 定期备份到本地（参考「怎么备份聊天记录和角色卡」词条）\n3. 关注服务商的到期提醒\n\n如果已经过期且数据被删：\n- 没有备份的话，数据无法找回\n- 重新买服务器，重新安装夜鹭机\n- 角色卡可以重新下载，但聊天记录没了就是没了\n\n建议：每月备份一次重要数据到本地电脑。"
+    },
+    {
+      "id": "what-is-1panel",
+      "term": "1Panel / 宝塔面板是什么？需要装吗？",
+      "category": "入门科普",
+      "brief": "服务器的图形化管理工具，推荐装但不强制。",
+      "detail": "1Panel 和宝塔面板都是服务器管理工具，它们提供网页界面让你管理服务器，不用记命令。\n\n它们能做什么：\n- 网页版终端（不用装 SSH 工具）\n- 文件管理器（上传/下载/编辑文件）\n- 防火墙管理（开放端口）\n- 系统监控（CPU、内存、磁盘）\n\n推荐哪个：\n- 1Panel：开源免费，界面现代，推荐\n- 宝塔面板：功能多但部分功能收费\n\n需要装吗：\n- 推荐装：方便管理，特别是网页终端和文件管理很实用\n- 不装也行：夜鹭机不依赖它们，只是有了更方便\n\n安装 1Panel（在终端运行）：\ncurl -sSL https://resource.fit2cloud.com/1panel/package/quick_start.sh -o quick_start.sh && bash quick_start.sh\n\n装完后会给你一个管理地址和账号密码，记下来。"
+    },
+    {
+      "id": "white-screen",
+      "term": "SillyTavern 打开后白屏 / 加载不出来",
+      "category": "常见问题",
+      "brief": "清缓存、换浏览器、检查是否安装完整。",
+      "detail": "白屏和「打不开」不同——白屏说明服务在运行，但前端加载出了问题。\n\n解决步骤：\n\n1. 强制刷新：Ctrl+Shift+R（清除缓存刷新）\n2. 清浏览器缓存：设置 → 清除浏览数据 → 清除缓存\n3. 换浏览器试试：Chrome、Edge、Firefox 都可以\n4. 用无痕模式打开：排除浏览器插件干扰\n\n如果以上都不行：\n5. 检查 SillyTavern 是否安装完整：\n   - 在管理面板看日志有没有报错\n   - 可能是 npm install 没跑完\n   - 在终端运行：cd /opt/sillytavern && npm install\n   - 然后重启：pm2 restart sillytavern\n\n6. 手机能打开但电脑不行（或反过来）：可能是某个设备的浏览器缓存问题，清缓存即可。"
+    },
+    {
+      "id": "how-to-delete-chat",
+      "term": "怎么删除/清空聊天记录？",
+      "category": "常见问题",
+      "brief": "在 SillyTavern 聊天界面点对话管理按钮即可删除。",
+      "detail": "在 SillyTavern 中管理聊天记录：\n\n删除单条消息：\n- 把鼠标移到那条消息上\n- 点出现的删除图标（垃圾桶）\n\n清空当前对话：\n- 点聊天界面顶部的扫帚图标\n- 确认清空\n\n删除整个对话：\n- 点顶部的对话管理（聊天气泡图标）\n- 选中要删除的对话\n- 点删除\n\n新建对话（保留旧对话）：\n- 点顶部的 + 号新建一个对话分支\n- 旧对话还在，可以随时切回去\n\n注意：删除后无法恢复！如果有重要的聊天记录，先备份再删。"
+    },
+    {
+      "id": "cost-estimate",
+      "term": "用云酒馆一个月大概花多少钱？",
+      "category": "入门科普",
+      "brief": "服务器50-100元/月 + AI接口费用按使用量计。",
+      "detail": "费用由两部分组成：\n\n1. 服务器租金（固定费用）：\n- 腾讯云/阿里云轻量：约 50-100 元/月\n- 活动价可能更低（新用户首年有折扣）\n- 选 2核2G 最便宜，2核4G 更稳\n\n2. AI 接口费用（按使用量）：\n- Claude（效果最好）：每天聊 1-2 小时约 5-15 元/天\n- GPT-4o：每天约 3-10 元/天\n- 国内中转 API：通常是官方价的 3-7 折\n- 聊得越多、对话越长，花得越多\n\n月费估算：\n- 轻度使用（每天聊几轮）：服务器 50 + API 30 ≈ 80 元/月\n- 中度使用（每天聊 1 小时）：服务器 50 + API 150 ≈ 200 元/月\n- 重度使用（每天几小时）：服务器 50 + API 300+ ≈ 350+ 元/月\n\n省钱技巧：\n- 用中转 API 而不是官方 API\n- 及时清理长对话（对话越长每次消耗越多）\n- 不用的时候不需要关服务器（服务器按月收费，不按使用时间）"
+    }
+  ]
+}

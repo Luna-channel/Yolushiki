@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AstrBot 配置教程 - 夜鹭机</title>
+    <link rel="icon" href="/static/logo.ico" type="image/x-icon">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
         :root {
@@ -116,13 +117,14 @@
             <div class="step">
                 <span class="step-num">1</span>
                 <strong>打开AstrBot管理面板</strong>
-                <p style="margin-top:10px;">访问 <code>http://你的服务器IP:6185</code></p>
+                <p style="margin-top:10px;">在夜鹭机仪表盘中点击 AstrBot 卡片的「打开」按钮</p>
+                <p style="margin-top:6px;">或手动访问 <code>http://{{ server_ip }}:{{ astrbot_port }}</code></p>
             </div>
             
             <div class="step">
                 <span class="step-num">2</span>
                 <strong>首次登录设置密码</strong>
-                <p style="margin-top:10px;">按照提示设置管理密码</p>
+                <p style="margin-top:10px;">AstrBot 首次打开时会要求你设置一个管理密码，设置好后即可登录。请务必记住这个密码！</p>
             </div>
             
             <div class="step">
@@ -131,7 +133,7 @@
                 <p style="margin-top:10px;">
                     进入「消息平台」→「添加」<br>
                     选择「NapCat」<br>
-                    连接地址填写：<code>ws://napcat:6199/ws</code>
+                    连接地址填写：<code>ws://napcat:6099/onebot/v11/ws</code>
                 </p>
             </div>
             
