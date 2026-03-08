@@ -1165,14 +1165,18 @@ def do_install(generation):
         install_status["progress"] = 98
         install_status["message"] = "注册常驻服务..."
         log("注册夜鹭机管理面板为常驻服务...")
-        run_command("pm2 delete yolushiki 2>/dev/null || true", quiet=True)
-        yolushiki_app = os.path.join(CONFIG_DIR, "app.py")
-        if os.path.exists(yolushiki_app):
-            run_command(
-                f'pm2 start {yolushiki_app} --name "yolushiki" --interpreter python3 -- --port 9999 --host 0.0.0.0',
-                quiet=True
-            )
+        already_in_pm2, _ = run_command("pm2 describe yolushiki 2>/dev/null", quiet=True)
+        if already_in_pm2:
+            log("夜鹭机已在 PM2 中运行，跳过重新注册")
             run_command("pm2 save", quiet=True)
+        else:
+            yolushiki_app = os.path.join(CONFIG_DIR, "app.py")
+            if os.path.exists(yolushiki_app):
+                run_command(
+                    f'pm2 start {yolushiki_app} --name "yolushiki" --interpreter python3 -- --port 9999 --host 0.0.0.0',
+                    quiet=True
+                )
+                run_command("pm2 save", quiet=True)
 
         install_status["progress"] = 100
         install_status["message"] = "安装完成！"
@@ -1937,14 +1941,18 @@ def _finish_install(generation):
     install_status["progress"] = 98
     install_status["message"] = "注册常驻服务..."
     log("注册夜鹭机管理面板为常驻服务...")
-    run_command("pm2 delete yolushiki 2>/dev/null || true", quiet=True)
-    yolushiki_app = os.path.join(CONFIG_DIR, "app.py")
-    if os.path.exists(yolushiki_app):
-        run_command(
-            f'pm2 start {yolushiki_app} --name "yolushiki" --interpreter python3 -- --port 9999 --host 0.0.0.0',
-            quiet=True
-        )
+    already_in_pm2, _ = run_command("pm2 describe yolushiki 2>/dev/null", quiet=True)
+    if already_in_pm2:
+        log("夜鹭机已在 PM2 中运行，跳过重新注册")
         run_command("pm2 save", quiet=True)
+    else:
+        yolushiki_app = os.path.join(CONFIG_DIR, "app.py")
+        if os.path.exists(yolushiki_app):
+            run_command(
+                f'pm2 start {yolushiki_app} --name "yolushiki" --interpreter python3 -- --port 9999 --host 0.0.0.0',
+                quiet=True
+            )
+            run_command("pm2 save", quiet=True)
     install_status["progress"] = 100
     install_status["message"] = "安装完成！"
     install_status["stage"] = "completed"
