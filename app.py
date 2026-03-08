@@ -646,7 +646,7 @@ def generate_astrbot_yml():
   astrbot:
     environment:
       - TZ=Asia/Shanghai
-    image: m.daocloud.io/docker.io/soulter/astrbot:latest
+    image: soulter/astrbot:latest
     container_name: astrbot
     restart: always
     ports:
@@ -1215,7 +1215,7 @@ def system_uninstall():
         else:
             results.append("⚠ 容器停止失败或已不存在")
     if remove_images:
-        for img in ["mlikiowa/napcat-docker", "soulter/astrbot", "m.daocloud.io/docker.io/soulter/astrbot"]:
+        for img in ["mlikiowa/napcat-docker", "soulter/astrbot", "m.daocloud.io/docker.io/soulter/astrbot", "docker.io/soulter/astrbot", "docker.io/mlikiowa/napcat-docker"]:
             run_command(f"docker rmi {img} 2>/dev/null", quiet=True)
         results.append("✓ 已删除相关 Docker 镜像")
     if remove_data:
