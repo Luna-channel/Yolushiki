@@ -735,6 +735,10 @@
             background: rgba(74,142,207,0.15); color: var(--accent-blue-light);
             border-color: var(--accent-blue-light);
         }
+        #ency-list-view {
+            flex: 1; display: flex; flex-direction: column;
+            overflow: hidden; min-height: 0;
+        }
         .ency-list {
             flex: 1; overflow-y: auto; padding: 0 12px 12px;
         }
@@ -1291,6 +1295,36 @@
         </div>
     </div>
 
+    <!-- ===== 酒馆重装弹窗 ===== -->
+    <div class="modal-overlay hidden" id="reinstall-tavern-modal">
+        <div class="modal" style="max-width:480px;">
+            <h2 style="color:var(--accent-yellow);"><i data-lucide="refresh-cw"></i> 重装 SillyTavern</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">重装将停止当前酒馆服务并重新部署。请设置以下参数：</p>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div style="margin:0;">
+                    <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">酒馆端口</label>
+                    <input type="number" id="reinstall-tavern-port" value="18880" min="1024" max="65535" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;box-sizing:border-box;">
+                </div>
+                <div style="margin:0;">
+                    <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">登录用户名</label>
+                    <input type="text" id="reinstall-tavern-username" placeholder="例如 admin" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;box-sizing:border-box;">
+                </div>
+                <div style="margin:0;">
+                    <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">登录密码（至少6位）</label>
+                    <input type="password" id="reinstall-tavern-password" placeholder="设置密码" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;box-sizing:border-box;">
+                </div>
+                <div style="margin:0;">
+                    <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">确认密码</label>
+                    <input type="password" id="reinstall-tavern-password-confirm" placeholder="再次输入密码" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;box-sizing:border-box;">
+                </div>
+            </div>
+            <div class="modal-btns" style="margin-top:16px;">
+                <button class="btn btn-secondary" onclick="document.getElementById('reinstall-tavern-modal').classList.add('hidden')">取消</button>
+                <button class="btn" style="background:var(--accent-yellow);color:#000;font-weight:600;" onclick="doReinstallTavern()">确认重装</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== 关闭界面 ===== -->
     <div class="shutdown-screen" id="shutdown-screen" style="display:none;">
         <img src="/static/logo.png" alt="夜鹭机" class="logo">
@@ -1749,9 +1783,10 @@
                         clearInterval(installInterval);
                         mirrorPanel.classList.add('hidden');
                         document.getElementById('error-panel').classList.add('hidden');
+                        const isReinstall = (data.message || '').includes('重装');
                         setTimeout(() => {
                             showDashboard();
-                            showPostInstallGuide();
+                            if (!isReinstall) showPostInstallGuide();
                         }, 1500);
                     } else if (data.stage === 'error') {
                         clearInterval(installInterval);
