@@ -858,68 +858,9 @@ def deploy_sillytavern():
 def set_sillytavern_password(tavern_dir):
     """为 SillyTavern 设置用户指定的用户名和密码"""
     storage_dir = os.path.join(tavern_dir, "data", "_storage")
-    tavern_port = config.get("tavern_port", 18880)
     
-    # 等待存储目录创建（最多20秒）
-    for i in range(20):
-        if os.path.exists(storage_dir):
-            break
-        if i % 5 == 0:
-            log(f"等待 SillyTavern 初始化存储目录... ({i}s)")
-        time.sleep(1)
-    
-    if not os.path.exists(storage_dir):
-        log("⚠ SillyTavern 存储目录未创建（等待20秒超时），跳过账号设置")
-        return
-    
-    # 访问 SillyTavern 页面以触发 default-user 创建
-    log("触发 SillyTavern 创建默认用户...")
-    run_command(f"curl -s -o /dev/null http://localhost:{tavern_port}/", quiet=True)
-    time.sleep(3)
-    
-    # 等待 default-user 文件出现（最多30秒）
-    target_file = None
-    for i in range(30):
-        user_files = glob.glob(os.path.join(storage_dir, "*.json"))
-        for f in user_files:
-            try:
-                with open(f, "r", encoding="utf-8") as fp:
-                    data = json.load(fp)
-                    if data.get("key") == "user:default-user":
-                        target_file = f
-                        break
-            except:
-                continue
-        if target_file:
-            break
-        if i == 0:
-            log(f"等待 default-user 存储文件... (已有{len(user_files)}个文件)")
-            # 每5秒再 curl 一次触发
-        if i > 0 and i % 5 == 0:
-            run_command(f"curl -s -o /dev/null http://localhost:{tavern_port}/", quiet=True)
-            log(f"再次触发用户创建... ({i}s, 已有{len(user_files)}个文件)")
-            # 打印已有文件的 key 帮助诊断
-            for f2 in user_files:
-                try:
-                    with open(f2, "r", encoding="utf-8") as fp2:
-                        d = json.load(fp2)
-                        log(f"  已有存储文件 key: {d.get('key', '?')}")
-                except:
-                    pass
-        time.sleep(1)
-    
-    if not target_file:
-        log("⚠ 未找到 default-user 存储文件（等待30秒超时），跳过账号设置")
-        # 最后打印所有存储文件帮助诊断
-        user_files = glob.glob(os.path.join(storage_dir, "*.json"))
-        for f in user_files:
-            try:
-                with open(f, "r", encoding="utf-8") as fp:
-                    d = json.load(fp)
-                    log(f"  存储文件: {os.path.basename(f)}, key={d.get('key', '?')}")
-            except:
-                pass
-        return
+    # 确保存储目录存在
+    os.makedirs(storage_dir, exist_ok=True)
     
     # 获取用户设置的用户名和密码
     username = config.get("tavern_username", "admin")
@@ -927,6 +868,24 @@ def set_sillytavern_password(tavern_dir):
     if not password:
         password = secrets.token_urlsafe(12)
         log(f"未设置密码，自动生成: {password}")
+    
+    # 短暂等待看 SillyTavern 是否自动创建了 default-user（最多10秒）
+    target_file = None
+    for i in range(10):
+        user_files = glob.glob(os.path.join(storage_dir, "*.json"))
+        for f in user_files:
+            try:
+                with open(f, "r", encoding="utf-8") as fp:
+                    data = json.load(fp)
+                    if isinstance(data.get("key"), str) and "default-user" in data["key"]:
+                        target_file = f
+                        break
+            except:
+                continue
+        if target_file:
+            log(f"找到已有用户文件: {os.path.basename(target_file)}")
+            break
+        time.sleep(1)
     
     # 生成 salt 和 hash（与 SillyTavern 的 crypto.scrypt 兼容，使用 hex 编码）
     salt = os.urandom(16).hex()
@@ -937,23 +896,37 @@ def set_sillytavern_password(tavern_dir):
     )
     password_hash_hex = password_hash.hex()
     
-    # 更新用户记录
     try:
-        with open(target_file, "r", encoding="utf-8") as fp:
-            data = json.load(fp)
-        
-        # 设置密码
-        data["value"]["password"] = password_hash_hex
-        data["value"]["salt"] = salt
-        # 修改用户名（key 和 name 都改）
-        data["key"] = f"user:{username}"
-        data["value"]["name"] = username
-        # 确保是管理员且启用
-        data["value"]["admin"] = True
-        data["value"]["enabled"] = True
+        if target_file:
+            # 修改已有文件
+            with open(target_file, "r", encoding="utf-8") as fp:
+                data = json.load(fp)
+            data["value"]["password"] = password_hash_hex
+            data["value"]["salt"] = salt
+            data["value"]["name"] = username
+            data["value"]["admin"] = True
+            data["value"]["enabled"] = True
+        else:
+            # SillyTavern 未自动创建用户文件，手动创建
+            log("SillyTavern 未自动创建用户文件，手动创建...")
+            target_file = os.path.join(storage_dir, "user-default-user.json")
+            data = {
+                "key": "user:default-user",
+                "value": {
+                    "handle": "default-user",
+                    "name": username,
+                    "created": int(time.time() * 1000),
+                    "password": password_hash_hex,
+                    "salt": salt,
+                    "admin": True,
+                    "enabled": True,
+                    "avatar": None,
+                    "block": []
+                }
+            }
         
         with open(target_file, "w", encoding="utf-8") as fp:
-            json.dump(data, fp, ensure_ascii=False)
+            json.dump(data, fp, ensure_ascii=False, indent=2)
         
         # 保存到配置
         config["tavern_username"] = username
