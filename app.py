@@ -1488,6 +1488,8 @@ def api_service_reinstall(name):
         "results": {},
         "current_stage": ""
     }
+    # 在主线程中捕获请求数据（线程内无法访问 Flask request 上下文）
+    reinstall_data = request.json or {}
     
     def do_reinstall():
         global install_status
@@ -1495,7 +1497,18 @@ def api_service_reinstall(name):
             if name == "sillytavern":
                 install_status["message"] = "重装 SillyTavern..."
                 log("开始重装 SillyTavern...")
-                # 删除旧目录
+                # 先停止 PM2 进程再删除目录（避免进程崩溃导致502）
+                run_command("pm2 stop sillytavern 2>/dev/null || true")
+                run_command("pm2 delete sillytavern 2>/dev/null || true")
+                install_status["progress"] = 10
+                # 应用前端传入的重装参数
+                if reinstall_data.get("tavern_port"):
+                    config["tavern_port"] = int(reinstall_data["tavern_port"])
+                if reinstall_data.get("tavern_username"):
+                    config["tavern_username"] = reinstall_data["tavern_username"]
+                if reinstall_data.get("tavern_password"):
+                    config["tavern_password"] = reinstall_data["tavern_password"]
+                save_config()
                 run_command("rm -rf /opt/sillytavern")
                 install_status["progress"] = 20
                 # 重新部署

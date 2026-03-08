@@ -735,6 +735,10 @@
             background: rgba(74,142,207,0.15); color: var(--accent-blue-light);
             border-color: var(--accent-blue-light);
         }
+        #ency-list-view {
+            flex: 1; display: flex; flex-direction: column;
+            overflow: hidden; min-height: 0;
+        }
         .ency-list {
             flex: 1; overflow-y: auto; padding: 0 12px 12px;
         }
@@ -1287,6 +1291,36 @@
             <div class="modal-btns" style="margin-top:16px;">
                 <button class="btn btn-secondary" onclick="hideUninstallDialog()">取消</button>
                 <button class="btn" id="uninst-btn" style="background:var(--accent-red);color:#fff;" onclick="doUninstall()">确认卸载</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 酒馆重装弹窗 ===== -->
+    <div class="modal-overlay hidden" id="reinstall-tavern-modal">
+        <div class="modal" style="max-width:480px;">
+            <h2 style="color:var(--accent-yellow);"><i data-lucide="refresh-cw"></i> 重装 SillyTavern</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">重装将停止当前酒馆服务并重新部署。请设置以下参数：</p>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div class="form-group" style="margin:0;">
+                    <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">酒馆端口</label>
+                    <input type="number" id="reinstall-tavern-port" value="18880" min="1024" max="65535" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">登录用户名</label>
+                    <input type="text" id="reinstall-tavern-username" placeholder="例如 admin" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">登录密码（至少6位）</label>
+                    <input type="password" id="reinstall-tavern-password" placeholder="设置密码" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">确认密码</label>
+                    <input type="password" id="reinstall-tavern-password-confirm" placeholder="再次输入密码" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;">
+                </div>
+            </div>
+            <div class="modal-btns" style="margin-top:16px;">
+                <button class="btn btn-secondary" onclick="document.getElementById('reinstall-tavern-modal').classList.add('hidden')">取消</button>
+                <button class="btn" style="background:var(--accent-yellow);color:#000;font-weight:600;" onclick="doReinstallTavern()">确认重装</button>
             </div>
         </div>
     </div>
@@ -2201,20 +2235,65 @@
 
         // ===== 重装 =====
         async function confirmReinstall(type) {
-            const names = { docker: 'AstrBot + NapCat', tavern: 'SillyTavern' };
-            const displayName = names[type] || type;
+            if (type === 'tavern') {
+                // 酒馆重装：弹出设置弹窗
+                const modal = document.getElementById('reinstall-tavern-modal');
+                document.getElementById('reinstall-tavern-port').value = 18880;
+                document.getElementById('reinstall-tavern-username').value = '';
+                document.getElementById('reinstall-tavern-password').value = '';
+                document.getElementById('reinstall-tavern-password-confirm').value = '';
+                modal.classList.remove('hidden');
+                lucide.createIcons();
+                return;
+            }
+            // Docker 重装（AstrBot + NapCat）
             const confirmed = await showConfirm(
-                `确定要重装 ${displayName} 吗？\n\n重装将停止当前服务、重新拉取/部署，数据可能丢失。`,
+                '确定要重装 AstrBot + NapCat 吗？\n\n重装将停止当前容器并重新拉取部署。',
                 '重装确认'
             );
             if (!confirmed) return;
-            const serviceName = type === 'docker' ? 'astrbot' : 'sillytavern';
+            startReinstall('astrbot', 'AstrBot + NapCat', {});
+        }
+
+        async function doReinstallTavern() {
+            const port = parseInt(document.getElementById('reinstall-tavern-port').value);
+            const username = document.getElementById('reinstall-tavern-username').value.trim();
+            const password = document.getElementById('reinstall-tavern-password').value;
+            const passwordConfirm = document.getElementById('reinstall-tavern-password-confirm').value;
+            if (port < 1024 || port > 65535) {
+                await showAlert('端口必须在 1024-65535 之间', 'warning', '提示');
+                return;
+            }
+            if (username && /[^a-zA-Z0-9_\-]/.test(username)) {
+                await showAlert('用户名只能包含英文字母、数字、下划线和横线', 'warning', '提示');
+                return;
+            }
+            if (password && password.length < 6) {
+                await showAlert('密码至少 6 位', 'warning', '提示');
+                return;
+            }
+            if (password && password !== passwordConfirm) {
+                await showAlert('两次输入的密码不一致', 'warning', '提示');
+                return;
+            }
+            document.getElementById('reinstall-tavern-modal').classList.add('hidden');
+            const body = { tavern_port: port };
+            if (username) body.tavern_username = username;
+            if (password) body.tavern_password = password;
+            startReinstall('sillytavern', 'SillyTavern', body);
+        }
+
+        async function startReinstall(serviceName, displayName, body) {
             showSection('progress-section');
             document.getElementById('progress-bar').style.width = '0%';
             document.getElementById('progress-text').textContent = `正在重装 ${displayName}...`;
             document.getElementById('log-box').innerHTML = '';
             try {
-                const resp = await fetch(`/api/services/${serviceName}/reinstall`, { method: 'POST' });
+                const resp = await fetch(`/api/services/${serviceName}/reinstall`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
                 if (!resp.ok) {
                     await showAlert(`重装请求失败 (${resp.status})`, 'error', '错误');
                     return;
@@ -2394,7 +2473,7 @@
                 ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
-                alert('已复制到剪贴板');
+                showAlert('已复制到剪贴板', 'info', '提示');
             }
         }
 
