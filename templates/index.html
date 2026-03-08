@@ -1525,11 +1525,24 @@
             refreshStatus();
             refreshSystemInfo();
             fetchNapCatToken();
-            fetchTavernPassword();
             checkServicesInstalled();
             if (statusInterval) clearInterval(statusInterval);
-            statusInterval = setInterval(refreshStatus, 8000);
+            statusInterval = setInterval(refreshStatus, 15000);
         }
+
+        // 标签页不可见时暂停轮询，减少服务器资源消耗
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+            } else {
+                const section = document.querySelector('.content-section:not(.hidden)');
+                if (section && section.id === 'dashboard-section') {
+                    refreshStatus();
+                    if (statusInterval) clearInterval(statusInterval);
+                    statusInterval = setInterval(refreshStatus, 15000);
+                }
+            }
+        });
 
         // ===== 服务安装状态检测 =====
         async function checkServicesInstalled() {
@@ -1824,6 +1837,15 @@
                 document.getElementById('sys-uptime').textContent = formatUptime(data.uptime_seconds);
                 document.getElementById('sys-mem').textContent = formatBytes(data.mem_used) + ' / ' + formatBytes(data.mem_total);
                 document.getElementById('sys-disk').textContent = formatBytes(data.disk_used) + ' / ' + formatBytes(data.disk_total);
+                // 同时更新酒馆密码（避免重复请求 /api/system/info）
+                if (data.tavern_password) {
+                    const card = document.getElementById('tavern-password-card');
+                    const pwdEl = document.getElementById('tavern-password-value');
+                    const userEl = document.getElementById('tavern-username-value');
+                    if (card) card.style.display = 'block';
+                    if (pwdEl) pwdEl.textContent = data.tavern_password;
+                    if (userEl) userEl.textContent = data.tavern_username || 'admin';
+                }
             } catch(e) { console.error('获取系统信息失败', e); }
         }
 

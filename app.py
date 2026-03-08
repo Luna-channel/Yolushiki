@@ -6,6 +6,7 @@
 
 VERSION = "0.3.0"
 
+import glob
 import json
 import os
 import secrets
@@ -74,6 +75,16 @@ install_status = {
     "current_stage": ""  # docker_pull, git_clone, npm_install, 等
 }
 install_generation = 0  # 安装代数，重试时递增，旧线程检测到不匹配则退出
+MAX_LOG_BYTES = 2 * 1024 * 1024  # 日志总内存上限 2MB
+_log_bytes = 0  # 当前日志占用字节数（近似追踪）
+
+# 服务状态缓存（减少 subprocess 调用）
+_status_cache = {"data": None, "time": 0}
+_STATUS_CACHE_TTL = 5  # 秒
+
+# 系统信息缓存
+_sysinfo_cache = {"data": None, "time": 0}
+_SYSINFO_CACHE_TTL = 30  # 秒（IP/磁盘/内存不会频繁变化）
 
 # 镜像/加速配置（运行时可切换）
 runtime_mirrors = {
@@ -133,10 +144,19 @@ def login_required(f):
 
 
 def log(message):
-    """添加日志"""
+    """添加日志（按总字节数限制，防止内存泄漏）"""
+    global _log_bytes
     timestamp = time.strftime("%H:%M:%S")
     log_entry = f"[{timestamp}] {message}"
+    entry_size = len(log_entry.encode('utf-8', errors='replace'))
     install_status["logs"].append(log_entry)
+    _log_bytes += entry_size
+    # 超过上限时砍掉前半部分
+    if _log_bytes > MAX_LOG_BYTES:
+        half = len(install_status["logs"]) // 2
+        removed = install_status["logs"][:half]
+        install_status["logs"] = install_status["logs"][half:]
+        _log_bytes -= sum(len(e.encode('utf-8', errors='replace')) for e in removed)
     print(log_entry)
 
 
@@ -176,17 +196,25 @@ def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, bufsize=1
         )
+        # 只保留最后100行输出，避免内存积累
         output_lines = []
-        for line in process.stdout:
-            # 检查是否被新安装覆盖，是则杀掉子进程退出
-            if generation is not None and generation != install_generation:
-                process.kill()
-                return False, "已被新安装取消"
-            line = line.strip()
-            if line:
-                output_lines.append(line)
-                # 每行都立即写入日志，前端即刻可见
-                log(line[:120])
+        max_output = 100
+        try:
+            for line in process.stdout:
+                # 检查是否被新安装覆盖，是则杀掉子进程退出
+                if generation is not None and generation != install_generation:
+                    process.kill()
+                    process.wait()
+                    return False, "已被新安装取消"
+                line = line.strip()
+                if line:
+                    output_lines.append(line)
+                    if len(output_lines) > max_output:
+                        output_lines = output_lines[-max_output:]
+                    # 每行都立即写入日志，前端即刻可见
+                    log(line[:120])
+        finally:
+            process.stdout.close()
         process.wait(timeout=timeout)
         if process.returncode != 0:
             log(f"命令返回码: {process.returncode}")
@@ -194,6 +222,7 @@ def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
         return True, "\n".join(output_lines)
     except subprocess.TimeoutExpired:
         process.kill()
+        process.wait()
         log("命令超时")
         return False, "命令执行超时"
     except Exception as e:
@@ -271,7 +300,10 @@ def check_napcat_error():
 
 
 def get_all_services_status():
-    """获取所有服务状态"""
+    """获取所有服务状态（带缓存，减少 subprocess 调用）"""
+    now = time.time()
+    if _status_cache["data"] is not None and (now - _status_cache["time"]) < _STATUS_CACHE_TTL:
+        return _status_cache["data"]
     statuses = {
         "napcat": get_service_status("napcat"),
         "astrbot": get_service_status("astrbot"),
@@ -283,6 +315,8 @@ def get_all_services_status():
         if napcat_err:
             statuses["napcat"]["last_error"] = napcat_err
             statuses["napcat"]["error_hint"] = "检测到连接异常，建议重启NapCat后重新扫码登录"
+    _status_cache["data"] = statuses
+    _status_cache["time"] = now
     return statuses
 
 
@@ -300,6 +334,7 @@ def service_action(name, action):
             )
         else:
             return False, "未知操作"
+        _status_cache["data"] = None  # 清除缓存，操作后立即刷新
         return ok, out
     else:
         # Docker 容器
@@ -311,6 +346,7 @@ def service_action(name, action):
             ok, out = run_command(f"docker start {name}", quiet=True)
         else:
             return False, "未知操作"
+        _status_cache["data"] = None  # 清除缓存，操作后立即刷新
         return ok, out
 
 
@@ -330,11 +366,18 @@ def get_service_logs(name, lines=50):
 
 
 def get_system_info():
-    """获取系统信息"""
+    """获取系统信息（带缓存，减少外部请求和 subprocess 调用）"""
+    now = time.time()
+    if _sysinfo_cache["data"] is not None and (now - _sysinfo_cache["time"]) < _SYSINFO_CACHE_TTL:
+        return _sysinfo_cache["data"]
     info = {}
-    # IP
-    ok, out = run_command("curl -s --connect-timeout 3 ifconfig.me || curl -s --connect-timeout 3 ip.sb", quiet=True)
-    info["ip"] = out.strip() if ok else config.get("server_ip", "未知")
+    # IP（优先用已保存的，避免反复 curl 外网）
+    saved_ip = config.get("server_ip", "")
+    if saved_ip and saved_ip != "你的服务器IP":
+        info["ip"] = saved_ip
+    else:
+        ok, out = run_command("curl -s --connect-timeout 3 ifconfig.me || curl -s --connect-timeout 3 ip.sb", quiet=True)
+        info["ip"] = out.strip() if ok else "未知"
     # 内存
     ok, out = run_command("free -b | grep Mem", quiet=True)
     if ok:
@@ -359,6 +402,8 @@ def get_system_info():
     # 酒馆登录信息
     info["tavern_username"] = config.get("tavern_username", "")
     info["tavern_password"] = config.get("tavern_password", "")
+    _sysinfo_cache["data"] = info
+    _sysinfo_cache["time"] = now
     return info
 
 
@@ -391,12 +436,19 @@ def get_napcat_token():
 
 # ========== 系统兼容性 ==========
 
+_cached_pkg_manager = None
+
 def detect_pkg_manager():
-    """检测系统包管理器，支持多发行版"""
+    """检测系统包管理器，支持多发行版（结果缓存）"""
+    global _cached_pkg_manager
+    if _cached_pkg_manager is not None:
+        return _cached_pkg_manager
     for cmd in ['apt-get', 'dnf', 'yum', 'pacman', 'zypper']:
         ok, _ = run_command(f"which {cmd}", quiet=True)
         if ok:
+            _cached_pkg_manager = cmd
             return cmd
+    _cached_pkg_manager = 'apt-get'
     return 'apt-get'
 
 
@@ -511,6 +563,7 @@ def install_pm2():
     success, output = run_command("pm2 --version", quiet=True)
     if success:
         log(f"PM2已安装: {output.strip()}")
+        _setup_pm2_logrotate()
         return True
     log("PM2未安装，开始安装...")
     npm_registry = runtime_mirrors.get("npm_registry", "")
@@ -518,7 +571,22 @@ def install_pm2():
         success, _ = run_command(f"npm install -g pm2 --registry={npm_registry}")
     else:
         success, _ = run_command("npm install -g pm2")
+    if success:
+        _setup_pm2_logrotate()
     return success
+
+
+def _setup_pm2_logrotate():
+    """配置 PM2 日志轮转，防止日志无限增长"""
+    ok, _ = run_command("pm2 describe pm2-logrotate", quiet=True)
+    if ok:
+        return  # 已安装
+    log("配置 PM2 日志轮转...")
+    run_command("pm2 install pm2-logrotate", quiet=True)
+    # 单个日志文件最大 10MB，保留 3 个旧文件
+    run_command("pm2 set pm2-logrotate:max_size 10M", quiet=True)
+    run_command("pm2 set pm2-logrotate:retain 3", quiet=True)
+    run_command("pm2 set pm2-logrotate:compress true", quiet=True)
 
 
 def generate_tavern_config_yaml():
@@ -570,6 +638,11 @@ def generate_astrbot_yml():
       - ./ntqq:/app/.config/QQ
     networks:
       - astrbot_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   astrbot:
     environment:
       - TZ=Asia/Shanghai
@@ -586,6 +659,11 @@ def generate_astrbot_yml():
       resources:
         limits:
           memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 networks:
   astrbot_network:
     driver: bridge
@@ -719,7 +797,6 @@ def deploy_sillytavern():
 
 def set_sillytavern_password(tavern_dir):
     """为 SillyTavern 设置用户指定的用户名和密码"""
-    import glob
     storage_dir = os.path.join(tavern_dir, "data", "_storage")
     
     # 等待存储目录创建
