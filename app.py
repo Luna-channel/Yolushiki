@@ -683,8 +683,6 @@ def generate_astrbot_yml():
     return '''services:
   napcat:
     environment:
-      - NAPCAT_UID=$${NAPCAT_UID:-1000}
-      - NAPCAT_GID=$${NAPCAT_GID:-1000}
       - MODE=astrbot
     ports:
       - 6099:6099
