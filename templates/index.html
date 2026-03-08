@@ -1123,9 +1123,19 @@
 
             <!-- 卸载/清理 -->
             <div class="card">
-                <h2><i data-lucide="trash-2"></i> 卸载 / 清理</h2>
+                <h2><i data-lucide="wrench"></i> 重装 / 卸载 / 清理</h2>
                 <div class="quick-links">
-                    <div class="quick-link" onclick="showUninstallDialog()" style="color:var(--accent-red);">
+                    <div class="quick-link" onclick="confirmReinstall('docker')">
+                        <i data-lucide="refresh-cw" style="color:var(--accent-yellow);"></i>
+                        <span class="ql-text">重装 AstrBot + NapCat</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </div>
+                    <div class="quick-link" onclick="confirmReinstall('tavern')">
+                        <i data-lucide="refresh-cw" style="color:var(--accent-yellow);"></i>
+                        <span class="ql-text">重装 SillyTavern</span>
+                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
+                    </div>
+                    <div class="quick-link" onclick="showUninstallDialog()" style="color:var(--accent-red);border-top:1px solid var(--border);margin-top:4px;padding-top:12px;">
                         <i data-lucide="alert-triangle"></i>
                         <span class="ql-text">卸载夜鹭机相关服务和数据</span>
                         <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
@@ -2189,6 +2199,32 @@
             document.getElementById('ency-detail-view').classList.remove('active');
         }
 
+        // ===== 重装 =====
+        async function confirmReinstall(type) {
+            const names = { docker: 'AstrBot + NapCat', tavern: 'SillyTavern' };
+            const displayName = names[type] || type;
+            const confirmed = await showConfirm(
+                `确定要重装 ${displayName} 吗？\n\n重装将停止当前服务、重新拉取/部署，数据可能丢失。`,
+                '重装确认'
+            );
+            if (!confirmed) return;
+            const serviceName = type === 'docker' ? 'astrbot' : 'sillytavern';
+            showSection('progress-section');
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('progress-text').textContent = `正在重装 ${displayName}...`;
+            document.getElementById('log-box').innerHTML = '';
+            try {
+                const resp = await fetch(`/api/services/${serviceName}/reinstall`, { method: 'POST' });
+                if (!resp.ok) {
+                    await showAlert(`重装请求失败 (${resp.status})`, 'error', '错误');
+                    return;
+                }
+                installInterval = setInterval(checkInstallStatus, 1000);
+            } catch(e) {
+                await showAlert('重装请求失败: ' + e.message, 'error', '错误');
+            }
+        }
+
         // ===== 卸载/清理 =====
         function showUninstallDialog() {
             document.getElementById('uninstall-modal').classList.remove('hidden');
@@ -2297,9 +2333,38 @@
                     lines.push(`NapCat端口: ${r.config.napcat_port}`);
                     lines.push(`酒馆端口: ${r.config.tavern_port}`);
                 }
+                if (r.napcat_webui) {
+                    lines.push('');
+                    lines.push('--- NapCat WebUI 配置 ---');
+                    lines.push(`webui.json 存在: ${r.napcat_webui.exists}`);
+                    if (r.napcat_webui.exists && !r.napcat_webui.parse_error) {
+                        lines.push(`  host: ${r.napcat_webui.host}`);
+                        lines.push(`  port: ${r.napcat_webui.port}`);
+                        lines.push(`  has_token: ${r.napcat_webui.has_token}`);
+                    }
+                }
+                if (r.tavern_config) {
+                    lines.push('');
+                    lines.push('--- SillyTavern 配置 ---');
+                    lines.push(`config.yaml 存在: ${r.tavern_config.exists}`);
+                    if (r.tavern_config.exists && !r.tavern_config.read_error) {
+                        lines.push(`  enableUserAccounts: ${r.tavern_config.enableUserAccounts}`);
+                        lines.push(`  securityOverride: ${r.tavern_config.securityOverride}`);
+                        lines.push(`  basicAuthMode: ${r.tavern_config.basicAuthMode}`);
+                    }
+                }
+                if (r.docker_logs) {
+                    lines.push('');
+                    lines.push('--- Docker 容器日志(最后20行) ---');
+                    for (const [cname, clog] of Object.entries(r.docker_logs)) {
+                        lines.push(`[${cname}]`);
+                        lines.push(clog);
+                        lines.push('');
+                    }
+                }
                 if (r.recent_logs && r.recent_logs.length > 0) {
                     lines.push('');
-                    lines.push('--- 最近日志(最后50条) ---');
+                    lines.push('--- 安装日志(最后50条) ---');
                     r.recent_logs.forEach(l => lines.push(l));
                 }
                 lines.push('');

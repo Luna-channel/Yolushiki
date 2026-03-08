@@ -738,6 +738,9 @@ def deploy_astrbot():
     with open(f"{astrbot_dir}/astrbot.yml", "w") as f:
         f.write(yml_content)
     log("astrbot.yml 已生成（含镜像加速）")
+    # 确保 NapCat 挂载目录存在
+    for sub in ["napcat/config", "ntqq", "data"]:
+        os.makedirs(os.path.join(astrbot_dir, sub), exist_ok=True)
     # 拉取镜像：直接用流式模式，实时显示进度
     log("拉取Docker镜像（实时进度）...")
     install_status["message"] = "拉取 Docker 镜像中..."
@@ -892,14 +895,14 @@ def set_sillytavern_password(tavern_dir):
         password = secrets.token_urlsafe(12)
         log(f"未设置密码，自动生成: {password}")
     
-    # 生成 salt 和 hash（与 SillyTavern 的 scrypt 算法兼容）
-    salt = base64.b64encode(os.urandom(16)).decode('utf-8')
+    # 生成 salt 和 hash（与 SillyTavern 的 crypto.scrypt 兼容，使用 hex 编码）
+    salt = os.urandom(16).hex()
     password_hash = hashlib.scrypt(
         password.encode('utf-8'),
         salt=salt.encode('utf-8'),
         n=16384, r=8, p=1, dklen=64
     )
-    password_hash_b64 = base64.b64encode(password_hash).decode('utf-8')
+    password_hash_hex = password_hash.hex()
     
     # 更新用户记录
     try:
@@ -907,7 +910,7 @@ def set_sillytavern_password(tavern_dir):
             data = json.load(fp)
         
         # 设置密码
-        data["value"]["password"] = password_hash_b64
+        data["value"]["password"] = password_hash_hex
         data["value"]["salt"] = salt
         # 修改用户名（key 和 name 都改）
         data["key"] = f"user:{username}"
@@ -1514,6 +1517,17 @@ def api_service_reinstall(name):
                 install_status["progress"] = 20
                 # 重新部署
                 if deploy_astrbot():
+                    install_status["progress"] = 80
+                    install_status["message"] = "获取 NapCat Token..."
+                    napcat_token = ""
+                    for _ in range(10):
+                        time.sleep(3)
+                        napcat_token = get_napcat_token()
+                        if napcat_token:
+                            log(f"NapCat WebUI Token: {napcat_token}")
+                            break
+                    config["napcat_token"] = napcat_token
+                    save_config()
                     install_status["progress"] = 100
                     install_status["stage"] = "completed"
                     install_status["message"] = "AstrBot + NapCat 重装完成"
@@ -1631,8 +1645,49 @@ def api_error_report():
         "install_astrbot": config.get("install_astrbot", True),
     }
 
-    # 7. 夜鹭机版本
-    report["yolushiki_version"] = "v0.2"
+    # 7. Docker 容器日志（最近 20 行）
+    docker_logs = {}
+    for cname in ["napcat", "astrbot"]:
+        ok, out = run_command(f"docker logs {cname} --tail 20 2>&1", quiet=True)
+        docker_logs[cname] = out.strip() if ok else "容器不存在或未运行"
+    report["docker_logs"] = docker_logs
+
+    # 8. NapCat WebUI 配置状态
+    webui_json = "/opt/astrbot/napcat/config/webui.json"
+    if os.path.exists(webui_json):
+        try:
+            with open(webui_json, "r") as f:
+                wdata = json.load(f)
+            report["napcat_webui"] = {
+                "exists": True,
+                "host": wdata.get("host", ""),
+                "port": wdata.get("port", ""),
+                "has_token": bool(wdata.get("token", ""))
+            }
+        except:
+            report["napcat_webui"] = {"exists": True, "parse_error": True}
+    else:
+        report["napcat_webui"] = {"exists": False}
+
+    # 9. SillyTavern config.yaml 关键字段
+    tavern_config_path = "/opt/sillytavern/config.yaml"
+    if os.path.exists(tavern_config_path):
+        try:
+            with open(tavern_config_path, "r") as f:
+                tc = f.read()
+            report["tavern_config"] = {
+                "exists": True,
+                "enableUserAccounts": "enableUserAccounts: true" in tc,
+                "securityOverride": "securityOverride: true" in tc,
+                "basicAuthMode": "basicAuthMode: true" in tc,
+            }
+        except:
+            report["tavern_config"] = {"exists": True, "read_error": True}
+    else:
+        report["tavern_config"] = {"exists": False}
+
+    # 10. 夜鹭机版本
+    report["yolushiki_version"] = VERSION
 
     return jsonify(report)
 
