@@ -221,7 +221,7 @@ echo ""
 # 如果有需要安装的依赖
 if [ "$NEED_INSTALL" -eq 1 ]; then
     echo -e "${BLUE}[3/5]${NC} 安装缺失依赖..."
-    echo -e "      ${YELLOW}⚠${NC}  这个过程可能需要 1-2 分钟，请耐心等待..."
+    echo -e "      ${YELLOW}⚠${NC}  这个过程大约需要 5 分钟，请耐心等待，不要中断或关闭终端！"
     echo ""
     
     # 更新软件包列表

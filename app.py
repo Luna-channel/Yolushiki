@@ -624,8 +624,8 @@ def generate_astrbot_yml():
     return '''services:
   napcat:
     environment:
-      - NAPCAT_UID=${{NAPCAT_UID:-1000}}
-      - NAPCAT_GID=${{NAPCAT_GID:-1000}}
+      - NAPCAT_UID=$${NAPCAT_UID:-1000}
+      - NAPCAT_GID=$${NAPCAT_GID:-1000}
       - MODE=astrbot
     ports:
       - 6099:6099
@@ -977,6 +977,7 @@ def do_install(generation):
         if missing:
             log(f"需要安装: {', '.join(missing)}")
             install_status["message"] = "更新系统包..."
+            install_status["current_stage"] = "dep_update"
             pkg_update()
         else:
             log("所有依赖已就绪，跳过安装")
@@ -986,6 +987,7 @@ def do_install(generation):
         if need_docker and not has_docker:
             install_status["progress"] = 8
             install_status["message"] = "安装 Docker..."
+            install_status["current_stage"] = "dep_docker"
             if not install_docker():
                 raise Exception("Docker安装失败。可能原因：网络无法访问 Docker 官方服务器。请检查服务器网络连接")
 
@@ -994,6 +996,7 @@ def do_install(generation):
         if need_tavern and not has_nodejs:
             install_status["progress"] = 15
             install_status["message"] = "安装 Node.js..."
+            install_status["current_stage"] = "dep_nodejs"
             if not install_nodejs():
                 raise Exception("Node.js安装失败。可能原因：网络无法访问 NodeSource 服务器。请检查网络连接")
 
@@ -1002,6 +1005,7 @@ def do_install(generation):
         if need_tavern and not has_pm2:
             install_status["progress"] = 20
             install_status["message"] = "安装 PM2..."
+            install_status["current_stage"] = "dep_pm2"
             if not install_pm2():
                 raise Exception("PM2安装失败。可能原因：NPM 无法访问。建议设置 npm 镜像加速后重试")
 

@@ -334,6 +334,22 @@
             font-size: 1rem;
             color: #fff;
             margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .install-spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2.5px solid rgba(255,255,255,0.2);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
         .log-box {
             background: #060d18;
@@ -1589,7 +1605,7 @@
             // 跳转到进度页面
             showSection('progress-section');
             document.getElementById('progress-bar').style.width = '0%';
-            document.getElementById('progress-text').textContent = `正在重装 ${displayName}...`;
+            document.getElementById('progress-text').innerHTML = `<span class="install-spinner"></span> 正在重装 ${displayName}...`;
             document.getElementById('log-box').innerHTML = '';
             
             try {
@@ -1677,7 +1693,12 @@
                     const progress = data.progress || 0;
                     const message = data.message || '准备中...';
                     document.getElementById('progress-bar').style.width = progress + '%';
-                    document.getElementById('progress-text').textContent = message + ' (' + progress + '%)';
+                    const ptEl = document.getElementById('progress-text');
+                    if (data.stage === 'installing') {
+                        ptEl.innerHTML = '<span class="install-spinner"></span> ' + message + ' (' + progress + '%)';
+                    } else {
+                        ptEl.textContent = message + ' (' + progress + '%)';
+                    }
                     const logBox = document.getElementById('log-box');
                     const logs = data.logs || [];
                     logBox.innerHTML = logs.map(l => '<div class="log-line">' + l + '</div>').join('');
@@ -1727,9 +1748,26 @@
                         clearInterval(installInterval);
                         document.getElementById('error-panel').classList.remove('hidden');
                         document.getElementById('error-message').textContent = data.message;
-                        // 错误时也显示对应阶段的换源选项
+                        // 错误时也显示对应阶段的换源选项和按钮
                         if (DOWNLOAD_STAGES.includes(cs)) {
                             mirrorPanel.classList.remove('hidden');
+                            dockerOpts.classList.add('hidden');
+                            gitOpts.classList.add('hidden');
+                            npmOpts.classList.add('hidden');
+                            if (cs === 'docker_pull') {
+                                titleEl.textContent = 'Docker 镜像加速';
+                                descEl.textContent = 'Docker 镜像拉取失败，可切换镜像源后重试。';
+                                dockerOpts.classList.remove('hidden');
+                            } else if (cs === 'git_clone') {
+                                titleEl.textContent = 'GitHub 加速';
+                                descEl.textContent = 'Git 克隆失败，可使用 GitHub 加速代理后重试。';
+                                gitOpts.classList.remove('hidden');
+                            } else if (cs === 'npm_install') {
+                                titleEl.textContent = 'npm 镜像加速';
+                                descEl.textContent = 'npm 安装失败，可切换 npm 镜像源后重试。';
+                                npmOpts.classList.remove('hidden');
+                            }
+                            lucide.createIcons();
                         }
                     }
                 });
