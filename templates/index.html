@@ -79,46 +79,6 @@
             color: #fff;
         }
 
-        /* ===== 侧边栏 ===== */
-        .app-sidebar {
-            position: fixed;
-            left: 0;
-            top: 57px;
-            bottom: 0;
-            width: 180px;
-            background: rgba(10,22,40,0.95);
-            border-right: 1px solid var(--border);
-            padding: 16px 0;
-            display: none;
-            flex-direction: column;
-            z-index: 50;
-            backdrop-filter: blur(10px);
-        }
-        .app-sidebar.visible { display: flex; }
-        .app-sidebar .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 11px 18px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 0.88rem;
-            border-left: 3px solid transparent;
-            user-select: none;
-        }
-        .app-sidebar .nav-item:hover {
-            background: rgba(45,90,142,0.15);
-            color: var(--text-primary);
-        }
-        .app-sidebar .nav-item.active {
-            color: var(--accent-blue-light);
-            background: rgba(45,90,142,0.2);
-            border-left-color: var(--accent-blue-light);
-        }
-        .app-sidebar .nav-item i { width: 17px; height: 17px; }
-        body.has-sidebar { padding-left: 180px; }
-
         /* ===== 容器 ===== */
         .container {
             max-width: 900px;
@@ -828,27 +788,17 @@
             <img src="/static/logo.png" alt="夜鹭机" style="width:28px;height:28px;border-radius:4px;">
             <span>夜鹭机</span>
         </div>
-        <button class="topbar-btn" onclick="openEncyclopedia()" title="百科教程" style="margin-left:12px;">
-            <i data-lucide="bird"></i>
-            <span style="font-size:0.8rem;">百科教程</span>
-        </button>
         <div class="topbar-actions">
-            <button class="topbar-btn topbar-btn-announce" onclick="showAnnouncement()" title="公告">
+            <button class="topbar-btn" onclick="openEncyclopedia()" title="百科教程">
+                <i data-lucide="bird"></i>
+                <span style="font-size:0.8rem;">百科教程</span>
+            </button>
+            <button class="topbar-btn topbar-btn-announce" onclick="showAnnouncement()" title="公告" style="margin-left:4px;">
                 <i data-lucide="megaphone"></i>
             </button>
             <button class="topbar-btn topbar-btn-danger" onclick="confirmShutdown()">
                 <i data-lucide="power"></i>
             </button>
-        </div>
-    </div>
-
-    <!-- ===== 侧边栏导航 ===== -->
-    <div class="app-sidebar" id="app-sidebar">
-        <div class="nav-item" id="nav-progress" onclick="showSection('progress-section')">
-            <i data-lucide="package"></i> 安装进度
-        </div>
-        <div class="nav-item" id="nav-dashboard" onclick="showSection('dashboard-section')">
-            <i data-lucide="layout-dashboard"></i> 仪表盘
         </div>
     </div>
 
@@ -1144,11 +1094,6 @@
                         <span class="ql-text">SillyTavern 使用指南</span>
                         <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
                     </a>
-                    <div class="quick-link" onclick="openEncyclopedia()" style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px;">
-                        <i data-lucide="book-open"></i>
-                        <span class="ql-text">百科全书 — 不懂的概念点这里查</span>
-                        <span class="ql-arrow"><i data-lucide="chevron-right"></i></span>
-                    </div>
                 </div>
             </div>
 
@@ -1583,19 +1528,6 @@
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             const el = document.getElementById(id);
             if (el) el.classList.add('active');
-            const sidebar = document.getElementById('app-sidebar');
-            if (id === 'setup-section') {
-                sidebar.classList.remove('visible');
-                document.body.classList.remove('has-sidebar');
-            } else {
-                sidebar.classList.add('visible');
-                document.body.classList.add('has-sidebar');
-                document.querySelectorAll('.app-sidebar .nav-item').forEach(n => n.classList.remove('active'));
-                const navId = id === 'progress-section' ? 'nav-progress' : 'nav-dashboard';
-                const navEl = document.getElementById(navId);
-                if (navEl) navEl.classList.add('active');
-            }
-            lucide.createIcons();
         }
 
         function showSetup() {
@@ -2297,6 +2229,7 @@
                 const r = await resp.json();
                 resultEl.textContent = r.results ? r.results.join('\n') : '卸载完成';
                 btn.textContent = '卸载完成';
+                setTimeout(() => location.reload(), 2000);
             } catch(e) {
                 const resultEl = document.getElementById('uninstall-result');
                 resultEl.style.display = 'block';

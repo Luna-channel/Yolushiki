@@ -1303,10 +1303,12 @@ def system_uninstall():
             else:
                 results.append("✓ 已停止 SillyTavern（数据保留）")
         if remove_dependencies:
-            run_command("pm2 delete yolushiki 2>/dev/null", quiet=True)
             run_command("npm uninstall -g pm2 2>/dev/null", quiet=True)
             results.append("✓ 已卸载 PM2")
             results.append("⚠ Docker 和 Node.js 未自动卸载（可能被其他服务使用），如需卸载请手动操作")
+        config["installed"] = False
+        save_config()
+        results.append("✓ 安装状态已重置，刷新页面可重新安装")
         return jsonify({"success": True, "results": results})
     except Exception as e:
         return jsonify({"success": False, "results": [f"❌ 卸载出错: {str(e)}"]})
