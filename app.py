@@ -13,6 +13,7 @@ import secrets
 import subprocess
 import threading
 import time
+import socket
 import functools
 import hashlib
 import base64
@@ -533,6 +534,64 @@ def configure_docker_mirrors():
         log(f"配置镜像加速失败: {e}")
 
 
+def check_and_fix_dns():
+    """检查 DNS 是否被污染，自动修复"""
+    test_domains = [
+        ("registry-1.docker.io", [
+            "34.", "44.", "52.", "54.", "18.", "3.", "13.", "99.", "143.", "108.",
+            "104.", "185.199.", "140.82."
+        ]),
+        ("deb.nodesource.com", []),
+    ]
+    dns_ok = True
+    for domain, valid_prefixes in test_domains:
+        try:
+            ip = socket.gethostbyname(domain)
+            if valid_prefixes:
+                if not any(ip.startswith(p) for p in valid_prefixes):
+                    log(f"⚠ DNS 异常: {domain} → {ip}（不是有效的 IP 段）")
+                    dns_ok = False
+                else:
+                    log(f"DNS 正常: {domain} → {ip}")
+            else:
+                log(f"DNS 解析: {domain} → {ip}")
+        except Exception as e:
+            log(f"⚠ DNS 解析失败: {domain} → {e}")
+            dns_ok = False
+
+    if not dns_ok:
+        log("检测到 DNS 污染，尝试自动修复...")
+        log("切换 DNS 为 Google(8.8.8.8) + Cloudflare(1.1.1.1)...")
+        # 方法1: 修改 systemd-resolved 配置
+        resolved_conf = "/etc/systemd/resolved.conf"
+        if os.path.exists(resolved_conf):
+            try:
+                with open(resolved_conf, "w") as f:
+                    f.write("[Resolve]\nDNS=8.8.8.8 1.1.1.1\nFallbackDNS=8.8.4.4 1.0.0.1\n")
+                run_command("systemctl restart systemd-resolved", quiet=True)
+                log("systemd-resolved DNS 已更新")
+            except Exception as e:
+                log(f"修改 systemd-resolved 失败: {e}")
+        # 方法2: 直接写 resolv.conf（兜底）
+        try:
+            resolv = "/etc/resolv.conf"
+            # 判断是否是符号链接（systemd-resolved 管理的情况）
+            if not os.path.islink(resolv):
+                with open(resolv, "w") as f:
+                    f.write("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+                log("resolv.conf DNS 已更新")
+        except Exception as e:
+            log(f"修改 resolv.conf 失败: {e}")
+        # 验证修复
+        time.sleep(1)
+        try:
+            ip = socket.gethostbyname("registry-1.docker.io")
+            log(f"修复后验证: registry-1.docker.io → {ip}")
+        except Exception as e:
+            log(f"修复后验证失败: {e}，请手动检查 DNS 配置")
+    return dns_ok
+
+
 def install_nodejs():
     """安装Node.js"""
     log("检查Node.js...")
@@ -960,6 +1019,15 @@ def do_install(generation):
             has_pm2 = True
         else:
             log("PM2 未安装")
+
+        # ========== DNS 健康检查 ==========
+        install_status["progress"] = 4
+        install_status["message"] = "检查网络环境..."
+        install_status["current_stage"] = "dns_check"
+        log("===== DNS 健康检查 =====")
+        check_and_fix_dns()
+
+        if cancelled(): return
 
         # ========== 阶段2：安装缺失依赖 ==========
         install_status["progress"] = 5

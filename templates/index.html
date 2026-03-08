@@ -79,11 +79,54 @@
             color: #fff;
         }
 
+        /* ===== 侧边栏 ===== */
+        .app-sidebar {
+            position: fixed;
+            left: 0;
+            top: 57px;
+            bottom: 0;
+            width: 180px;
+            background: rgba(10,22,40,0.95);
+            border-right: 1px solid var(--border);
+            padding: 16px 0;
+            display: none;
+            flex-direction: column;
+            z-index: 50;
+            backdrop-filter: blur(10px);
+        }
+        .app-sidebar.visible { display: flex; }
+        .app-sidebar .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 18px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.88rem;
+            border-left: 3px solid transparent;
+            user-select: none;
+        }
+        .app-sidebar .nav-item:hover {
+            background: rgba(45,90,142,0.15);
+            color: var(--text-primary);
+        }
+        .app-sidebar .nav-item.active {
+            color: var(--accent-blue-light);
+            background: rgba(45,90,142,0.2);
+            border-left-color: var(--accent-blue-light);
+        }
+        .app-sidebar .nav-item i { width: 17px; height: 17px; }
+
         /* ===== 容器 ===== */
         .container {
             max-width: 900px;
             margin: 0 auto;
             padding: 30px 20px;
+            transition: margin-left 0.25s ease;
+        }
+        body.has-sidebar .container {
+            margin-left: 180px;
         }
 
         /* ===== 卡片 ===== */
@@ -795,6 +838,16 @@
             <button class="topbar-btn topbar-btn-danger" onclick="confirmShutdown()">
                 <i data-lucide="power"></i>
             </button>
+        </div>
+    </div>
+
+    <!-- ===== 侧边栏导航 ===== -->
+    <div class="app-sidebar" id="app-sidebar">
+        <div class="nav-item" id="nav-progress" onclick="showSection('progress-section')">
+            <i data-lucide="package"></i> 安装进度
+        </div>
+        <div class="nav-item" id="nav-dashboard" onclick="showSection('dashboard-section')">
+            <i data-lucide="layout-dashboard"></i> 仪表盘
         </div>
     </div>
 
@@ -1529,6 +1582,21 @@
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             const el = document.getElementById(id);
             if (el) el.classList.add('active');
+            // 侧边栏：安装向导时隐藏，其他页面显示
+            const sidebar = document.getElementById('app-sidebar');
+            if (id === 'setup-section') {
+                sidebar.classList.remove('visible');
+                document.body.classList.remove('has-sidebar');
+            } else {
+                sidebar.classList.add('visible');
+                document.body.classList.add('has-sidebar');
+                // 高亮当前导航项
+                document.querySelectorAll('.app-sidebar .nav-item').forEach(n => n.classList.remove('active'));
+                const navId = id === 'progress-section' ? 'nav-progress' : 'nav-dashboard';
+                const navEl = document.getElementById(navId);
+                if (navEl) navEl.classList.add('active');
+            }
+            lucide.createIcons();
         }
 
         function showSetup() {
