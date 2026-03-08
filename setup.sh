@@ -3,7 +3,7 @@
 # 夜鹭机 一键安装引导脚本
 #
 # 使用方法（在服务器终端粘贴这一行）：
-# bash <(curl -fsSL https://raw.githubusercontent.com/Luna-channel/Yolushiki/main/setup.sh)
+# bash <(curl -fsSL https://raw.githubusercontent.com/Luna-channel/Yolushiki/master/setup.sh)
 # ============================================================
 
 RED='\033[0;31m'
@@ -112,12 +112,12 @@ fi
 if [ "$DOWNLOAD_OK" -eq 0 ]; then
     echo -e "      ${YELLOW}⚠${NC}  git clone 失败，尝试直接下载压缩包..."
     mkdir -p "$INSTALL_DIR"
-    if curl -fsSL "$REPO_URL/archive/refs/heads/main.tar.gz" -o /tmp/yolushiki.tar.gz; then
+    if curl -fsSL "$REPO_URL/archive/refs/heads/master.tar.gz" -o /tmp/yolushiki.tar.gz; then
         tar xzf /tmp/yolushiki.tar.gz -C /tmp
-        # GitHub tarball 解压后目录名为 Yolushiki-main
-        if [ -d "/tmp/Yolushiki-main" ]; then
-            cp -r /tmp/Yolushiki-main/* "$INSTALL_DIR/"
-            rm -rf /tmp/Yolushiki-main /tmp/yolushiki.tar.gz
+        # GitHub tarball 解压后目录名为 Yolushiki-master
+        if [ -d "/tmp/Yolushiki-master" ]; then
+            cp -r /tmp/Yolushiki-master/* "$INSTALL_DIR/"
+            rm -rf /tmp/Yolushiki-master /tmp/yolushiki.tar.gz
             DOWNLOAD_OK=1
             echo -e "      ${GREEN}✓${NC}  下载完成（tarball）"
         fi

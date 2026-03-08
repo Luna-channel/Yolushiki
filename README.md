@@ -25,7 +25,7 @@
 - ❌ 禁止除作者本人外上传至 DC 中文酒馆社区
 
 > 如果你在任何渠道**购买**了夜鹭机，凭退款 + 举报截图联系小红书 **@柯尔速递** 领取免费 1 对 1 技术支持。
-> 如果你的举报让店家封店，额外赠送定制机器人角色卡（2000字）一张。
+> 如果你的举报成功让倒卖店家封店，额外赠送定制机器人角色卡一张。
 
 **作者**：[Luna_Dol](https://github.com/Luna-channel)
 
@@ -89,7 +89,7 @@
 
 【安装夜鹭机的两种方式】
 - 方式A（有面板）：通过 1Panel/宝塔面板的文件管理器上传 yolushiki 文件夹到 /opt/，然后在面板终端运行 bash /opt/yolushiki/install.sh
-- 方式B（纯终端）：在 SSH 终端中运行一键命令 bash <(curl -fsSL https://raw.githubusercontent.com/Luna-channel/Yolushiki/main/setup.sh)
+- 方式B（纯终端）：在 SSH 终端中运行一键命令 bash <(curl -fsSL https://raw.githubusercontent.com/Luna-channel/Yolushiki/master/setup.sh)
 
 确认我选择的安装方式，并根据我的选择提供帮助。记住，我是一个没有任何基础的新手，不了解云服务器/linux系统/计算机编程等知识，请不要告诉我对我没有帮助或有技术门槛的信息。如果你对项目有任何不确定的地方，请引导我将项目的文档发给你查看，开发者已经写了详细的文档（README.md），你可以从中获得所有你需要的信息。
 
@@ -149,7 +149,7 @@
 在终端中**复制粘贴下面这一行命令**，按回车即可自动下载并安装：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Luna-channel/Yolushiki/main/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/Luna-channel/Yolushiki/master/setup.sh)
 ```
 
 > 💡 如果提示 `Permission denied` 或 `请使用 root 用户运行`，先输入 `sudo su` 回车，再重新粘贴上面的命令。
