@@ -858,9 +858,10 @@ def deploy_sillytavern():
 def set_sillytavern_password(tavern_dir):
     """为 SillyTavern 设置用户指定的用户名和密码"""
     storage_dir = os.path.join(tavern_dir, "data", "_storage")
+    tavern_port = config.get("tavern_port", 18880)
     
-    # 等待存储目录创建（最多30秒）
-    for i in range(30):
+    # 等待存储目录创建（最多20秒）
+    for i in range(20):
         if os.path.exists(storage_dir):
             break
         if i % 5 == 0:
@@ -868,8 +869,13 @@ def set_sillytavern_password(tavern_dir):
         time.sleep(1)
     
     if not os.path.exists(storage_dir):
-        log("⚠ SillyTavern 存储目录未创建（等待30秒超时），跳过账号设置")
+        log("⚠ SillyTavern 存储目录未创建（等待20秒超时），跳过账号设置")
         return
+    
+    # 访问 SillyTavern 页面以触发 default-user 创建
+    log("触发 SillyTavern 创建默认用户...")
+    run_command(f"curl -s -o /dev/null http://localhost:{tavern_port}/", quiet=True)
+    time.sleep(3)
     
     # 等待 default-user 文件出现（最多30秒）
     target_file = None
@@ -886,12 +892,33 @@ def set_sillytavern_password(tavern_dir):
                 continue
         if target_file:
             break
-        if i % 5 == 0:
-            log(f"等待 default-user 存储文件创建... ({i}s, 已有{len(user_files)}个文件)")
+        if i == 0:
+            log(f"等待 default-user 存储文件... (已有{len(user_files)}个文件)")
+            # 每5秒再 curl 一次触发
+        if i > 0 and i % 5 == 0:
+            run_command(f"curl -s -o /dev/null http://localhost:{tavern_port}/", quiet=True)
+            log(f"再次触发用户创建... ({i}s, 已有{len(user_files)}个文件)")
+            # 打印已有文件的 key 帮助诊断
+            for f2 in user_files:
+                try:
+                    with open(f2, "r", encoding="utf-8") as fp2:
+                        d = json.load(fp2)
+                        log(f"  已有存储文件 key: {d.get('key', '?')}")
+                except:
+                    pass
         time.sleep(1)
     
     if not target_file:
         log("⚠ 未找到 default-user 存储文件（等待30秒超时），跳过账号设置")
+        # 最后打印所有存储文件帮助诊断
+        user_files = glob.glob(os.path.join(storage_dir, "*.json"))
+        for f in user_files:
+            try:
+                with open(f, "r", encoding="utf-8") as fp:
+                    d = json.load(fp)
+                    log(f"  存储文件: {os.path.basename(f)}, key={d.get('key', '?')}")
+            except:
+                pass
         return
     
     # 获取用户设置的用户名和密码
