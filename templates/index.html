@@ -117,16 +117,13 @@
             border-left-color: var(--accent-blue-light);
         }
         .app-sidebar .nav-item i { width: 17px; height: 17px; }
+        body.has-sidebar { padding-left: 180px; }
 
         /* ===== 容器 ===== */
         .container {
             max-width: 900px;
             margin: 0 auto;
             padding: 30px 20px;
-            transition: margin-left 0.25s ease;
-        }
-        body.has-sidebar .container {
-            margin-left: 180px;
         }
 
         /* ===== 卡片 ===== */
@@ -831,6 +828,10 @@
             <img src="/static/logo.png" alt="夜鹭机" style="width:28px;height:28px;border-radius:4px;">
             <span>夜鹭机</span>
         </div>
+        <button class="topbar-btn" onclick="openEncyclopedia()" title="百科教程" style="margin-left:12px;">
+            <i data-lucide="bird"></i>
+            <span style="font-size:0.8rem;">百科教程</span>
+        </button>
         <div class="topbar-actions">
             <button class="topbar-btn topbar-btn-announce" onclick="showAnnouncement()" title="公告">
                 <i data-lucide="megaphone"></i>
@@ -1582,7 +1583,6 @@
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             const el = document.getElementById(id);
             if (el) el.classList.add('active');
-            // 侧边栏：安装向导时隐藏，其他页面显示
             const sidebar = document.getElementById('app-sidebar');
             if (id === 'setup-section') {
                 sidebar.classList.remove('visible');
@@ -1590,7 +1590,6 @@
             } else {
                 sidebar.classList.add('visible');
                 document.body.classList.add('has-sidebar');
-                // 高亮当前导航项
                 document.querySelectorAll('.app-sidebar .nav-item').forEach(n => n.classList.remove('active'));
                 const navId = id === 'progress-section' ? 'nav-progress' : 'nav-dashboard';
                 const navEl = document.getElementById(navId);
@@ -2286,13 +2285,24 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(body)
                 });
-                const r = await resp.json();
                 const resultEl = document.getElementById('uninstall-result');
                 resultEl.style.display = 'block';
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    resultEl.textContent = '卸载请求失败 (' + resp.status + '): ' + text.substring(0, 200);
+                    btn.textContent = '卸载失败';
+                    btn.disabled = false;
+                    return;
+                }
+                const r = await resp.json();
                 resultEl.textContent = r.results ? r.results.join('\n') : '卸载完成';
                 btn.textContent = '卸载完成';
             } catch(e) {
+                const resultEl = document.getElementById('uninstall-result');
+                resultEl.style.display = 'block';
+                resultEl.textContent = '卸载请求异常: ' + e.message;
                 btn.textContent = '卸载失败';
+                btn.disabled = false;
             }
         }
 

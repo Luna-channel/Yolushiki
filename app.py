@@ -1263,46 +1263,53 @@ def system_shutdown():
 @login_required
 def system_uninstall():
     """卸载/清理夜鹭机"""
-    data = request.json or {}
-    remove_containers = data.get("remove_containers", True)
-    remove_images = data.get("remove_images", False)
-    remove_data = data.get("remove_data", False)
-    remove_sillytavern = data.get("remove_sillytavern", True)
-    remove_dependencies = data.get("remove_dependencies", False)
-    results = []
-    if remove_containers:
-        cmds = [
-            ("docker compose -f /opt/astrbot/astrbot.yml down", "停止 AstrBot/NapCat 容器"),
-            ("docker-compose -f /opt/astrbot/astrbot.yml down", "停止容器(兼容命令)"),
-        ]
-        for cmd, desc in cmds:
-            ok, out = run_command(cmd, quiet=True)
-            if ok:
-                results.append(f"✓ {desc}")
-                break
-        else:
-            results.append("⚠ 容器停止失败或已不存在")
-    if remove_images:
-        for img in ["mlikiowa/napcat-docker", "soulter/astrbot", "m.daocloud.io/docker.io/soulter/astrbot", "docker.io/soulter/astrbot", "docker.io/mlikiowa/napcat-docker"]:
-            run_command(f"docker rmi {img} 2>/dev/null", quiet=True)
-        results.append("✓ 已删除相关 Docker 镜像")
-    if remove_data:
-        for d in ["/opt/astrbot"]:
-            run_command(f"rm -rf {d}", quiet=True)
-        results.append("✓ 已删除 AstrBot/NapCat 数据 (/opt/astrbot)")
-    if remove_sillytavern:
-        run_command("pm2 delete sillytavern 2>/dev/null", quiet=True)
+    try:
+        data = request.json or {}
+        remove_containers = data.get("remove_containers", True)
+        remove_images = data.get("remove_images", False)
+        remove_data = data.get("remove_data", False)
+        remove_sillytavern = data.get("remove_sillytavern", True)
+        remove_dependencies = data.get("remove_dependencies", False)
+        results = []
+        if remove_containers:
+            yml = "/opt/astrbot/astrbot.yml"
+            if os.path.exists(yml):
+                cmds = [
+                    (f"docker compose -f {yml} down --timeout 30", "停止 AstrBot/NapCat 容器"),
+                    (f"docker-compose -f {yml} down --timeout 30", "停止容器(兼容命令)"),
+                ]
+                for cmd, desc in cmds:
+                    ok, out = run_command(cmd, quiet=True)
+                    if ok:
+                        results.append(f"✓ {desc}")
+                        break
+                else:
+                    results.append("⚠ 容器停止失败")
+            else:
+                results.append("⚠ astrbot.yml 不存在，跳过容器停止")
+        if remove_images:
+            for img in ["mlikiowa/napcat-docker", "soulter/astrbot", "m.daocloud.io/docker.io/soulter/astrbot", "docker.io/soulter/astrbot", "docker.io/mlikiowa/napcat-docker"]:
+                run_command(f"docker rmi {img} 2>/dev/null", quiet=True)
+            results.append("✓ 已删除相关 Docker 镜像")
         if remove_data:
-            run_command("rm -rf /opt/sillytavern", quiet=True)
-            results.append("✓ 已删除 SillyTavern 数据 (/opt/sillytavern)")
-        else:
-            results.append("✓ 已停止 SillyTavern（数据保留）")
-    if remove_dependencies:
-        run_command("pm2 delete yolushiki 2>/dev/null", quiet=True)
-        run_command("npm uninstall -g pm2 2>/dev/null", quiet=True)
-        results.append("✓ 已卸载 PM2")
-        results.append("⚠ Docker 和 Node.js 未自动卸载（可能被其他服务使用），如需卸载请手动操作")
-    return jsonify({"success": True, "results": results})
+            for d in ["/opt/astrbot"]:
+                run_command(f"rm -rf {d}", quiet=True)
+            results.append("✓ 已删除 AstrBot/NapCat 数据 (/opt/astrbot)")
+        if remove_sillytavern:
+            run_command("pm2 delete sillytavern 2>/dev/null", quiet=True)
+            if remove_data:
+                run_command("rm -rf /opt/sillytavern", quiet=True)
+                results.append("✓ 已删除 SillyTavern 数据 (/opt/sillytavern)")
+            else:
+                results.append("✓ 已停止 SillyTavern（数据保留）")
+        if remove_dependencies:
+            run_command("pm2 delete yolushiki 2>/dev/null", quiet=True)
+            run_command("npm uninstall -g pm2 2>/dev/null", quiet=True)
+            results.append("✓ 已卸载 PM2")
+            results.append("⚠ Docker 和 Node.js 未自动卸载（可能被其他服务使用），如需卸载请手动操作")
+        return jsonify({"success": True, "results": results})
+    except Exception as e:
+        return jsonify({"success": False, "results": [f"❌ 卸载出错: {str(e)}"]})
 
 
 @app.route("/api/auth/change-token", methods=["POST"])
