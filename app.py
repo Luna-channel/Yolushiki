@@ -859,31 +859,39 @@ def set_sillytavern_password(tavern_dir):
     """为 SillyTavern 设置用户指定的用户名和密码"""
     storage_dir = os.path.join(tavern_dir, "data", "_storage")
     
-    # 等待存储目录创建
-    for _ in range(15):
+    # 等待存储目录创建（最多30秒）
+    for i in range(30):
         if os.path.exists(storage_dir):
             break
+        if i % 5 == 0:
+            log(f"等待 SillyTavern 初始化存储目录... ({i}s)")
         time.sleep(1)
     
     if not os.path.exists(storage_dir):
-        log("SillyTavern 存储目录未创建，跳过账号设置")
+        log("⚠ SillyTavern 存储目录未创建（等待30秒超时），跳过账号设置")
         return
     
-    # 查找 default-user 的存储文件
-    user_files = glob.glob(os.path.join(storage_dir, "*.json"))
+    # 等待 default-user 文件出现（最多30秒）
     target_file = None
-    for f in user_files:
-        try:
-            with open(f, "r", encoding="utf-8") as fp:
-                data = json.load(fp)
-                if data.get("key") == "user:default-user":
-                    target_file = f
-                    break
-        except:
-            continue
+    for i in range(30):
+        user_files = glob.glob(os.path.join(storage_dir, "*.json"))
+        for f in user_files:
+            try:
+                with open(f, "r", encoding="utf-8") as fp:
+                    data = json.load(fp)
+                    if data.get("key") == "user:default-user":
+                        target_file = f
+                        break
+            except:
+                continue
+        if target_file:
+            break
+        if i % 5 == 0:
+            log(f"等待 default-user 存储文件创建... ({i}s, 已有{len(user_files)}个文件)")
+        time.sleep(1)
     
     if not target_file:
-        log("未找到 default-user 存储文件，跳过账号设置")
+        log("⚠ 未找到 default-user 存储文件（等待30秒超时），跳过账号设置")
         return
     
     # 获取用户设置的用户名和密码
