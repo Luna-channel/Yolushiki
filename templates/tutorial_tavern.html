@@ -92,6 +92,19 @@
             gap: 10px;
         }
         .tip i { color: var(--accent-green); width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
+        .warning {
+            background: rgba(212,160,23,0.1); border: 1px solid rgba(212,160,23,0.3);
+            padding: 14px; border-radius: 8px; margin: 16px 0;
+            display: flex; align-items: flex-start; gap: 10px;
+        }
+        .warning i { color: var(--accent-yellow); width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
+        .danger {
+            background: rgba(192,57,43,0.15); border: 1px solid rgba(192,57,43,0.4);
+            padding: 14px; border-radius: 8px; margin: 16px 0;
+            display: flex; align-items: flex-start; gap: 10px;
+        }
+        .danger i { color: var(--accent-red); width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
+        p { line-height: 1.6; }
     </style>
 </head>
 <body>
@@ -100,97 +113,148 @@
         
         <div class="card">
             <h1><i data-lucide="warehouse"></i> SillyTavern 云酒馆使用指南</h1>
-            
-            <h2><i data-lucide="users"></i> 一、首次访问</h2>
-            
+
+            <div class="warning">
+                <i data-lucide="alert-triangle"></i>
+                <span><strong>重要说明：</strong>夜鹭机安装的是 SillyTavern <strong>原生版本</strong>，没有预装任何插件或预设。你需要自己配置 AI 接口和导入角色卡。</span>
+            </div>
+
+            <h2><i data-lucide="users"></i> 一、首次访问与登录</h2>
+
             <div class="step">
                 <span class="step-num">1</span>
                 <strong>打开云酒馆</strong>
                 <p style="margin-top:10px;">在夜鹭机仪表盘中点击云酒馆卡片的「打开」按钮</p>
                 <p style="margin-top:6px;">或手动访问 <code>http://{{ server_ip }}:{{ tavern_port }}</code></p>
             </div>
-            
+
             <div class="step">
                 <span class="step-num">2</span>
-                <strong>登录账号</strong>
-                <p style="margin-top:10px;">使用安装时设置的用户名和密码登录。如果忘记了，可以在夜鹭机仪表盘的「云酒馆登录信息」卡片中查看。</p>
+                <strong>选择用户登录</strong>
+                <p style="margin-top:10px;">打开后你会看到一个用户选择界面。<strong>你必须选择安装时设置的那个用户名</strong>，然后输入密码登录。</p>
+                <p style="margin-top:6px;">如果忘记了用户名和密码，可以在夜鹭机仪表盘的「云酒馆登录信息」卡片中查看。</p>
             </div>
-            
-            <div class="step">
-                <span class="step-num">3</span>
-                <strong>开始使用</strong>
-                <p style="margin-top:10px;">登录后即可使用。每个用户有独立的角色卡、聊天记录和设置。</p>
+
+            <div class="danger">
+                <i data-lucide="alert-octagon"></i>
+                <span><strong>不要选择 Default User（默认用户）！</strong><br>
+                默认用户没有密码，任何人知道你的地址和端口就能直接进入使用，会白白消耗你的 API 额度。<br>
+                请务必选择你自己设置的用户名，输入密码后登录。</span>
             </div>
-            
-            <h2><i data-lucide="plug"></i> 二、配置AI接口</h2>
-            
+
+            <h2><i data-lucide="plug"></i> 二、配置 AI 接口（最重要的第一步）</h2>
+
             <div class="step">
                 <span class="step-num">1</span>
-                <strong>打开API设置</strong>
-                <p style="margin-top:10px;">点击顶部的「API」按钮（插头图标）</p>
+                <strong>打开 API 设置</strong>
+                <p style="margin-top:10px;">登录后，点击顶部工具栏的<strong>插头图标</strong>（API 连接按钮），打开 API 设置面板。</p>
             </div>
-            
+
             <div class="step">
                 <span class="step-num">2</span>
-                <strong>选择API类型</strong>
-                <p style="margin-top:10px;">
-                    常用选择：<br>
-                    - Chat Completion（OpenAI/DeepSeek等）<br>
-                    - Claude<br>
-                    - 自定义API
-                </p>
+                <strong>切换到聊天补全模式</strong>
+                <p style="margin-top:10px;">在 API 设置面板顶部，你会看到一个下拉菜单（默认可能是 Text Completion）。<strong>请将其切换为 Chat Completion</strong>。</p>
+                <p style="margin-top:6px;">Chat Completion 是目前最主流的 API 格式，OpenAI、DeepSeek、Claude 中转、Gemini 等都使用这个格式。</p>
             </div>
-            
+
+            <div class="danger">
+                <i data-lucide="alert-octagon"></i>
+                <span><strong>必须先切换到 Chat Completion！</strong>这是新手最容易忽略的一步。如果不切换，你填了 API Key 也可能无法正常使用。</span>
+            </div>
+
             <div class="step">
                 <span class="step-num">3</span>
-                <strong>填写API信息</strong>
-                <p style="margin-top:10px;">输入API地址和Key，点击连接测试</p>
+                <strong>选择 AI 来源</strong>
+                <p style="margin-top:10px;">
+                    切换到 Chat Completion 后，在下方选择你的 AI 来源：<br>
+                    - <strong>OpenAI</strong>：适用于 OpenAI 官方、DeepSeek、国内中转等（最通用）<br>
+                    - <strong>Claude</strong>：适用于 Anthropic Claude 官方 API<br>
+                    - <strong>Custom (OpenAI-compatible)</strong>：适用于其他兼容 OpenAI 格式的 API
+                </p>
             </div>
-            
+
+            <div class="step">
+                <span class="step-num">4</span>
+                <strong>填写 API 信息</strong>
+                <p style="margin-top:10px;">
+                    以 OpenAI 兼容格式为例（适用于大多数中转和 DeepSeek）：<br>
+                    - <strong>API Key</strong>：填入你的密钥<br>
+                    - <strong>API URL</strong>：填入 API 地址（如 DeepSeek 是 <code>https://api.deepseek.com</code>）<br>
+                    - 填完后点击「Connect」测试连接
+                </p>
+            </div>
+
+            <div class="tip">
+                <i data-lucide="lightbulb"></i>
+                <span><strong>没有 API Key？</strong>你需要先去 AI 服务商注册并获取。常用的有 DeepSeek（便宜好用）、OpenAI、Claude 等。API 是按使用量计费的。</span>
+            </div>
+
             <h2><i data-lucide="user-plus"></i> 三、导入角色卡</h2>
-            
+
             <div class="step">
                 <span class="step-num">1</span>
                 <strong>获取角色卡</strong>
                 <p style="margin-top:10px;">
-                    推荐网站：<br>
-                    - Chub.ai<br>
-                    - Character Hub<br>
-                    - 或者自己创建
+                    角色卡是 AI 角色的人设文件。推荐获取渠道：<br>
+                    - <a href="https://chub.ai" target="_blank" style="color:var(--accent-blue-light)">Chub.ai</a>（最大的角色卡分享平台）<br>
+                    - 各种社区群分享<br>
+                    - 自己在 SillyTavern 里创建
                 </p>
             </div>
-            
+
             <div class="step">
                 <span class="step-num">2</span>
                 <strong>导入角色</strong>
-                <p style="margin-top:10px;">点击角色列表上方的「导入」按钮，选择角色卡文件（PNG/JSON）</p>
+                <p style="margin-top:10px;">点击左侧角色列表上方的「导入」按钮，选择角色卡文件（PNG/JSON 格式）。也可以直接把文件拖进页面。</p>
             </div>
-            
-            <div class="tip">
-                <i data-lucide="lightbulb"></i>
-                <span><strong>提示：</strong>SillyTavern支持多种格式的角色卡，包括PNG（带嵌入数据）、JSON、YAML等。</span>
-            </div>
-            
+
             <h2><i data-lucide="message-circle"></i> 四、开始对话</h2>
-            
+
             <div class="step">
                 <span class="step-num">1</span>
-                <strong>选择角色</strong>
-                <p style="margin-top:10px;">在角色列表中点击想要对话的角色</p>
+                <strong>选择角色并开始聊天</strong>
+                <p style="margin-top:10px;">在角色列表中点击想对话的角色，在底部输入框输入消息，按回车发送。</p>
             </div>
-            
-            <div class="step">
-                <span class="step-num">2</span>
-                <strong>开始聊天</strong>
-                <p style="margin-top:10px;">在底部输入框输入消息，按回车发送</p>
-            </div>
-            
+
             <div class="tip">
                 <i data-lucide="keyboard"></i>
-                <span><strong>快捷键：</strong><br>
-                - Enter: 发送消息<br>
-                - Ctrl+Enter: 换行<br>
-                - 上箭头: 编辑上一条消息</span>
+                <span><strong>快捷键：</strong>Enter 发送 / Ctrl+Enter 换行 / 上箭头 编辑上一条</span>
+            </div>
+
+            <h2><i data-lucide="smartphone"></i> 五、手机访问</h2>
+
+            <div class="step">
+                <p>手机浏览器直接输入 <code>http://{{ server_ip }}:{{ tavern_port }}</code> 即可访问。</p>
+                <p style="margin-top:6px;">
+                    <strong>添加到主屏幕（像 App 一样用）：</strong><br>
+                    - iPhone：Safari 打开 → 点分享 → 添加到主屏幕<br>
+                    - Android：Chrome 打开 → 右上角菜单 → 添加到主屏幕
+                </p>
+            </div>
+
+            <h2><i data-lucide="help-circle"></i> 六、常见问题</h2>
+
+            <div class="step">
+                <strong>Q: 打不开酒馆页面？</strong>
+                <p style="margin-top:10px;">
+                    1. 确认用的是 <code>http://</code> 不是 <code>https://</code><br>
+                    2. 检查端口是否在云服务商控制台放行了<br>
+                    3. 在夜鹭机仪表盘检查云酒馆服务是否运行中
+                </p>
+            </div>
+
+            <div class="step">
+                <strong>Q: 发消息没有回复？</strong>
+                <p style="margin-top:10px;">
+                    1. 确认已切换到 <strong>Chat Completion</strong> 模式<br>
+                    2. 检查 API Key 是否正确填写，点「Connect」测试<br>
+                    3. 检查 API 余额是否充足
+                </p>
+            </div>
+
+            <div class="step">
+                <strong>Q: 多人可以同时使用吗？</strong>
+                <p style="margin-top:10px;">可以。每个用户有独立的角色卡、聊天记录和设置，互不干扰。但 API 费用共享，由你承担。</p>
             </div>
         </div>
     </div>

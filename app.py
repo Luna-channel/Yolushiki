@@ -1372,7 +1372,7 @@ def index():
 @login_required
 def tutorial(name):
     """教程页面"""
-    templates = ["napcat", "astrbot", "tavern"]
+    templates = ["napcat", "astrbot", "tavern", "server"]
     if name not in templates:
         return redirect(url_for("index"))
     return render_template(f"tutorial_{name}.html",

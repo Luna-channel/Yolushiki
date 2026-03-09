@@ -92,6 +92,12 @@
             gap: 10px;
         }
         .warning i { color: var(--accent-yellow); width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
+        .danger {
+            background: rgba(192,57,43,0.1); border: 1px solid rgba(192,57,43,0.3);
+            padding: 14px; border-radius: 8px; margin: 16px 0;
+            display: flex; align-items: flex-start; gap: 10px;
+        }
+        .danger i { color: var(--accent-red); width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
     </style>
 </head>
 <body>
@@ -100,61 +106,104 @@
         
         <div class="card">
             <h1><i data-lucide="cat"></i> NapCat 扫码登录教程</h1>
-            
+
             <div class="warning">
                 <i data-lucide="alert-triangle"></i>
-                <span><strong>重要提示：</strong>必须先完成NapCat扫码登录，AstrBot才能接收QQ消息！</span>
+                <span><strong>重要提示：</strong>必须先完成 NapCat 扫码登录，AstrBot 才能接收 QQ 消息！<br>请使用<strong>小号</strong>登录，不要用你的主 QQ 号。</span>
             </div>
-            
-            <h2><i data-lucide="list-ordered"></i> 步骤说明</h2>
-            
+
+            <h2><i data-lucide="key"></i> 一、获取 NapCat Token</h2>
+
             <div class="step">
                 <span class="step-num">1</span>
-                <strong>打开NapCat管理面板</strong>
-                <p style="margin-top:10px;">在夜鹭机管理面板仪表盘中，点击 NapCat 卡片的「打开」按钮</p>
+                <strong>在夜鹭机仪表盘获取 Token</strong>
+                <p style="margin-top:10px;">回到夜鹭机管理面板，找到「NapCat 登录信息」卡片，点击「获取」按钮，系统会自动读取并显示 Token。</p>
+                <p style="margin-top:6px;">点击「复制」按钮将 Token 复制到剪贴板。</p>
+            </div>
+
+            <h2><i data-lucide="list-ordered"></i> 二、扫码登录</h2>
+
+            <div class="step">
+                <span class="step-num">1</span>
+                <strong>打开 NapCat 管理面板</strong>
+                <p style="margin-top:10px;">在夜鹭机仪表盘中点击 NapCat 卡片的「打开」按钮</p>
                 <p style="margin-top:6px;">或手动访问 <code>http://{{ server_ip }}:{{ napcat_port }}</code></p>
             </div>
-            
+
             <div class="step">
                 <span class="step-num">2</span>
                 <strong>输入 Token 登录</strong>
-                <p style="margin-top:10px;">NapCat 管理面板需要 Token 才能登录。Token 可以在夜鹭机仪表盘的「NapCat 登录信息」卡片中点击「获取」按钮查看并复制。</p>
-                <p style="margin-top:6px;">将复制的 Token 粘贴到 NapCat 登录页面的输入框中，点击登录。</p>
+                <p style="margin-top:10px;">将刚才复制的 Token 粘贴到 NapCat 登录页面的输入框中，点击登录。</p>
             </div>
-            
+
             <div class="step">
                 <span class="step-num">3</span>
                 <strong>扫描二维码</strong>
-                <p style="margin-top:10px;">登录后，使用你的 QQ APP 扫描页面上的二维码</p>
+                <p style="margin-top:10px;">登录后页面会显示一个 QQ 二维码，用你的 <strong>QQ 小号</strong>打开手机 QQ，扫描这个二维码并确认登录。</p>
             </div>
-            
+
             <div class="step">
                 <span class="step-num">4</span>
-                <strong>确认登录</strong>
-                <p style="margin-top:10px;">在手机QQ上确认登录请求</p>
+                <strong>确认连接成功</strong>
+                <p style="margin-top:10px;">登录成功后，NapCat 面板会显示已连接状态。回到夜鹭机仪表盘，NapCat 卡片会显示「运行中」。</p>
             </div>
-            
+
+            <h2><i data-lucide="network"></i> 三、配置 NapCat 连接 AstrBot</h2>
+
             <div class="step">
-                <span class="step-num">5</span>
-                <strong>检查连接状态</strong>
-                <p style="margin-top:10px;">登录成功后，NapCat面板会显示"已连接"状态，夜鹭机仪表盘中 NapCat 也会显示为「运行中」</p>
+                <span class="step-num">1</span>
+                <strong>打开网络配置</strong>
+                <p style="margin-top:10px;">在 NapCat 面板左侧点击「网络配置」。一般默认已经建好了一个 WebSocket 客户端连接，如果没有，点击「新建」→「WebSocket 客户端」。</p>
             </div>
-            
-            <h2><i data-lucide="help-circle"></i> 常见问题</h2>
-            
+
+            <div class="step">
+                <span class="step-num">2</span>
+                <strong>确认配置内容</strong>
+                <p style="margin-top:10px;">
+                    - <strong>启用</strong>：开启<br>
+                    - <strong>URL</strong>：<code>ws://astrbot:6199/ws</code><br>
+                    - <strong>重连间隔</strong>：5000ms<br>
+                    - <strong>心跳间隔</strong>：5000ms<br>
+                    - <strong>消息格式</strong>：Array
+                </p>
+                <p style="margin-top:6px;">确认后点击保存。</p>
+            </div>
+
+            <div class="danger">
+                <i data-lucide="alert-octagon"></i>
+                <span><strong>不要修改 URL！</strong>因为 AstrBot 和 NapCat 在同一个 Docker 网络中，直接用 <code>astrbot</code> 作为主机名。不要改成 IP 地址或加入自己的理解，照抄即可。</span>
+            </div>
+
+            <h2><i data-lucide="help-circle"></i> 四、常见问题</h2>
+
             <div class="step">
                 <strong>Q: 打不开 NapCat 页面？</strong>
-                <p style="margin-top:10px;">请检查云服务商控制台是否已开放端口 <code>{{ napcat_port }}</code>（TCP协议）。阿里云/腾讯云等需要在安全组中手动放行。</p>
+                <p style="margin-top:10px;">检查云服务商控制台是否已开放端口 <code>{{ napcat_port }}</code>（TCP 协议）。注意是在<strong>云服务商的网页后台</strong>开，不是在服务器里面开。</p>
             </div>
-            
+
             <div class="step">
-                <strong>Q: 二维码一直刷新怎么办？</strong>
-                <p style="margin-top:10px;">检查服务器时间是否正确，可以运行：<code>timedatectl set-timezone Asia/Shanghai</code></p>
+                <strong>Q: 扫码登录失败 / 有风险提示？</strong>
+                <p style="margin-top:10px;">
+                    这是最常见的问题，原因是腾讯的风控机制。解决方法：<br><br>
+                    <strong>方案一：</strong>用手机 QQ 正常登录小号，等一个晚上（睡一觉），第二天再试，一般就好了。<br>
+                    <strong>方案二：</strong>换一个活跃的小号试试。<br><br>
+                    在夜鹭机仪表盘点击 NapCat 的「重启」按钮后重新扫码。
+                </p>
             </div>
-            
+
             <div class="step">
-                <strong>Q: 扫码后提示异地登录？</strong>
-                <p style="margin-top:10px;">这是正常的，确认登录即可。如果频繁掉线，建议使用小号。</p>
+                <strong>Q: 二维码过期 / 一直刷新？</strong>
+                <p style="margin-top:10px;">在夜鹭机仪表盘点 NapCat「重启」按钮，然后刷新 NapCat 页面重新扫码。</p>
+            </div>
+
+            <div class="step">
+                <strong>Q: 不小心扫了自己的主号怎么办？</strong>
+                <p style="margin-top:10px;">在夜鹭机仪表盘点 NapCat「重启」按钮，重启后就可以重新扫码了。</p>
+            </div>
+
+            <div class="danger">
+                <i data-lucide="alert-octagon"></i>
+                <span><strong>特别提醒：</strong>如果你没有技术经验，<strong>不要听信 AI 乱改服务器配置！</strong>风控问题最好的办法就是重启+等待，而不是改这改那。</span>
             </div>
         </div>
     </div>

@@ -323,7 +323,7 @@ else
         echo -e "      ${YELLOW}⚠${NC}  找不到 logo.png（非必须）"
     fi
 
-    for tpl in login.html index.html tutorial_napcat.html tutorial_astrbot.html tutorial_tavern.html; do
+    for tpl in login.html index.html tutorial_napcat.html tutorial_astrbot.html tutorial_tavern.html tutorial_server.html; do
         if [ -f "$SCRIPT_DIR/templates/$tpl" ]; then
             cp "$SCRIPT_DIR/templates/$tpl" "$YOLUSHIKI_DIR/templates/$tpl" || COPY_OK=0
         else
