@@ -493,6 +493,49 @@
             margin-bottom: 16px;
         }
 
+        /* 日志查看器 */
+        .log-viewer { margin-top: 8px; }
+        .log-panel {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .log-panel-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .log-panel-header:hover { background: rgba(45,90,142,0.15); }
+        .log-panel-header i { width: 16px; height: 16px; color: var(--accent-blue-light); }
+        .log-panel-header .log-svc-name { flex: 1; font-weight: 500; font-size: 0.88rem; }
+        .log-panel-header .log-chevron { transition: transform 0.2s; color: var(--text-secondary); }
+        .log-panel-header .log-chevron.open { transform: rotate(90deg); }
+        .log-panel-body {
+            display: none;
+            padding: 0;
+        }
+        .log-panel-body.open { display: block; }
+        .log-panel-body .logs-content {
+            margin: 0;
+            border-radius: 0;
+            max-height: 280px;
+            font-size: 0.72rem;
+        }
+        .log-panel-actions {
+            display: flex;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.1);
+            border-top: 1px solid var(--border);
+        }
+        .log-panel-actions .svc-btn { font-size: 0.72rem; padding: 4px 10px; }
+
         /* ===== 自定义弹窗 ===== */
         .dialog-overlay {
             position: fixed;
@@ -1040,6 +1083,55 @@
                 </div>
             </div>
 
+            <!-- 服务日志查看器 -->
+            <div class="card">
+                <h2><i data-lucide="terminal"></i> 服务日志</h2>
+                <div class="log-viewer">
+                    <div class="log-panel" id="log-panel-napcat">
+                        <div class="log-panel-header" onclick="toggleLogPanel('napcat')">
+                            <i data-lucide="cat"></i>
+                            <span class="log-svc-name">NapCat</span>
+                            <i data-lucide="chevron-right" class="log-chevron" id="log-chevron-napcat"></i>
+                        </div>
+                        <div class="log-panel-body" id="log-body-napcat">
+                            <div class="logs-content" id="log-content-napcat">点击展开加载日志...</div>
+                            <div class="log-panel-actions">
+                                <button class="svc-btn" onclick="refreshServiceLog('napcat')"><i data-lucide="refresh-cw"></i> 刷新</button>
+                                <button class="svc-btn" onclick="copyServiceLog('napcat')"><i data-lucide="copy"></i> 复制</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="log-panel" id="log-panel-astrbot">
+                        <div class="log-panel-header" onclick="toggleLogPanel('astrbot')">
+                            <i data-lucide="bot"></i>
+                            <span class="log-svc-name">AstrBot</span>
+                            <i data-lucide="chevron-right" class="log-chevron" id="log-chevron-astrbot"></i>
+                        </div>
+                        <div class="log-panel-body" id="log-body-astrbot">
+                            <div class="logs-content" id="log-content-astrbot">点击展开加载日志...</div>
+                            <div class="log-panel-actions">
+                                <button class="svc-btn" onclick="refreshServiceLog('astrbot')"><i data-lucide="refresh-cw"></i> 刷新</button>
+                                <button class="svc-btn" onclick="copyServiceLog('astrbot')"><i data-lucide="copy"></i> 复制</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="log-panel" id="log-panel-sillytavern">
+                        <div class="log-panel-header" onclick="toggleLogPanel('sillytavern')">
+                            <i data-lucide="warehouse"></i>
+                            <span class="log-svc-name">云酒馆 (SillyTavern)</span>
+                            <i data-lucide="chevron-right" class="log-chevron" id="log-chevron-sillytavern"></i>
+                        </div>
+                        <div class="log-panel-body" id="log-body-sillytavern">
+                            <div class="logs-content" id="log-content-sillytavern">点击展开加载日志...</div>
+                            <div class="log-panel-actions">
+                                <button class="svc-btn" onclick="refreshServiceLog('sillytavern')"><i data-lucide="refresh-cw"></i> 刷新</button>
+                                <button class="svc-btn" onclick="copyServiceLog('sillytavern')"><i data-lucide="copy"></i> 复制</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 云酒馆登录信息 -->
             <div class="card" id="tavern-password-card" style="display:none;">
                 <h2><i data-lucide="key"></i> 云酒馆登录信息</h2>
@@ -1431,10 +1523,28 @@
             return showDialog({ type, title, message, showCancel: true, confirmText: '确定', cancelText: '取消' });
         }
 
+        // 通用复制函数（兼容HTTP非安全上下文）
+        function copyToClipboard(text) {
+            if (navigator.clipboard) {
+                return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+            }
+            return fallbackCopy(text);
+        }
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;left:-9999px;';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            return Promise.resolve();
+        }
+
         // 关闭界面相关
         function copyRestartCmd() {
             const cmd = document.getElementById('restart-cmd').textContent;
-            navigator.clipboard.writeText(cmd);
+            copyToClipboard(cmd);
             const box = document.querySelector('.shutdown-screen .cmd-box');
             box.style.background = '#1a3d1a';
             setTimeout(() => box.style.background = '', 1000);
@@ -1894,11 +2004,27 @@
             if (!statusEl) return;
 
             const isOnline = info.status === 'online' || info.status === 'running';
-            const statusClass = isOnline ? 'online' : 'stopped';
-            const statusText = isOnline ? '运行中' : '已停止';
+            const healthOk = info.health_ok !== false; // 默认true（兼容旧版后端）
+            let statusClass, statusText;
+
+            if (isOnline && !healthOk) {
+                statusClass = 'loading';
+                statusText = '服务不可达';
+            } else if (isOnline) {
+                statusClass = 'online';
+                statusText = '运行中';
+            } else {
+                statusClass = 'stopped';
+                statusText = '已停止';
+            }
 
             statusEl.className = 'svc-status ' + statusClass;
             statusEl.innerHTML = '<span class="dot"></span> ' + statusText;
+
+            // 端口不可达提示（502场景）
+            if (isOnline && !healthOk) {
+                statusEl.innerHTML += ' <span style="color:var(--accent-yellow);font-size:0.7rem;margin-left:4px;">⚠ 端口未响应</span>';
+            }
 
             // M5: NapCat 连接错误提示
             if (name === 'napcat' && info.last_error) {
@@ -2030,11 +2156,11 @@
 
         function copyNapCatToken() {
             const token = document.getElementById('napcat-token-value')?.textContent;
-            if (token && navigator.clipboard) {
-                navigator.clipboard.writeText(token);
+            if (!token) return;
+            copyToClipboard(token).then(() => {
                 const btn = event.target.closest('.svc-btn');
                 if (btn) { const orig = btn.innerHTML; btn.innerHTML = '<i data-lucide="check"></i> 已复制'; lucide.createIcons(); setTimeout(() => { btn.innerHTML = orig; lucide.createIcons(); }, 1500); }
-            }
+            });
         }
 
         async function fetchTavernPassword() {
@@ -2054,11 +2180,49 @@
 
         function copyTavernPassword() {
             const pwd = document.getElementById('tavern-password-value')?.textContent;
-            if (pwd && pwd !== '--' && navigator.clipboard) {
-                navigator.clipboard.writeText(pwd);
+            if (!pwd || pwd === '--') return;
+            copyToClipboard(pwd).then(() => {
                 const btn = event.target.closest('.svc-btn');
                 if (btn) { const orig = btn.innerHTML; btn.innerHTML = '<i data-lucide="check"></i> 已复制'; lucide.createIcons(); setTimeout(() => { btn.innerHTML = orig; lucide.createIcons(); }, 1500); }
+            });
+        }
+
+        // ===== 日志查看器 =====
+        function toggleLogPanel(name) {
+            const body = document.getElementById('log-body-' + name);
+            const chevron = document.getElementById('log-chevron-' + name);
+            const isOpen = body.classList.contains('open');
+            if (isOpen) {
+                body.classList.remove('open');
+                chevron.classList.remove('open');
+            } else {
+                body.classList.add('open');
+                chevron.classList.add('open');
+                refreshServiceLog(name);
             }
+        }
+
+        async function refreshServiceLog(name) {
+            const contentEl = document.getElementById('log-content-' + name);
+            contentEl.textContent = '加载中...';
+            try {
+                const res = await fetch('/api/services/' + name + '/logs?lines=80');
+                if (res.status === 401) { window.location.href = '/login'; return; }
+                const data = await res.json();
+                contentEl.textContent = data.logs || '暂无日志';
+                contentEl.scrollTop = contentEl.scrollHeight;
+            } catch(e) {
+                contentEl.textContent = '获取日志失败: ' + e.message;
+            }
+        }
+
+        function copyServiceLog(name) {
+            const text = document.getElementById('log-content-' + name)?.textContent;
+            if (!text || text === '点击展开加载日志...') return;
+            copyToClipboard(text).then(() => {
+                const btn = event.target.closest('.svc-btn');
+                if (btn) { const orig = btn.innerHTML; btn.innerHTML = '<i data-lucide="check"></i> 已复制'; lucide.createIcons(); setTimeout(() => { btn.innerHTML = orig; lucide.createIcons(); }, 1500); }
+            });
         }
 
         async function restartService(name) {
@@ -2470,24 +2634,14 @@
 
         async function copyErrorReport() {
             if (!_errorReportText) return;
-            try {
-                await navigator.clipboard.writeText(_errorReportText);
-                const btn = document.getElementById('copy-report-btn');
-                btn.innerHTML = '<i data-lucide="check"></i> 已复制';
+            await copyToClipboard(_errorReportText);
+            const btn = document.getElementById('copy-report-btn');
+            btn.innerHTML = '<i data-lucide="check"></i> 已复制';
+            lucide.createIcons();
+            setTimeout(() => {
+                btn.innerHTML = '<i data-lucide="copy"></i> 一键复制';
                 lucide.createIcons();
-                setTimeout(() => {
-                    btn.innerHTML = '<i data-lucide="copy"></i> 一键复制';
-                    lucide.createIcons();
-                }, 2000);
-            } catch(e) {
-                const ta = document.createElement('textarea');
-                ta.value = _errorReportText;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-                alert('已复制到剪贴板');
-            }
+            }, 2000);
         }
 
         function hideReportModal() {

@@ -16,7 +16,6 @@ import time
 import socket
 import functools
 import hashlib
-import base64
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 
 app = Flask(__name__)
@@ -233,8 +232,25 @@ def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
 
 # ========== 服务管理 ==========
 
+def check_port_health(port, timeout=2):
+    """检查本地端口是否可达（TCP连接测试）"""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect(("127.0.0.1", int(port)))
+        s.close()
+        return True
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        return False
+
+
 def get_service_status(name):
     """获取单个服务状态"""
+    port_map = {
+        "napcat": config.get("napcat_port", 6099),
+        "astrbot": config.get("astrbot_port", 6185),
+        "sillytavern": config.get("tavern_port", 18888),
+    }
     if name == "sillytavern":
         ok, output = run_command("pm2 jlist", quiet=True)
         if ok:
@@ -242,7 +258,7 @@ def get_service_status(name):
                 processes = json.loads(output)
                 for p in processes:
                     if p.get("name") == "sillytavern":
-                        return {
+                        result = {
                             "name": "sillytavern",
                             "status": p.get("pm2_env", {}).get("status", "unknown"),
                             "pid": p.get("pid", 0),
@@ -251,10 +267,15 @@ def get_service_status(name):
                             "memory": p.get("monit", {}).get("memory", 0),
                             "cpu": p.get("monit", {}).get("cpu", 0),
                         }
+                        if result["status"] == "online":
+                            result["health_ok"] = check_port_health(port_map["sillytavern"])
+                        else:
+                            result["health_ok"] = False
+                        return result
             except (json.JSONDecodeError, KeyError):
                 pass
         return {"name": "sillytavern", "status": "stopped", "pid": 0,
-                "uptime": 0, "restarts": 0, "memory": 0, "cpu": 0}
+                "uptime": 0, "restarts": 0, "memory": 0, "cpu": 0, "health_ok": False}
     else:
         # Docker 容器 (astrbot / napcat)
         ok, output = run_command(
@@ -282,8 +303,9 @@ def get_service_status(name):
                     cpu = float(parts[1].replace("%", "").strip())
                 except (IndexError, ValueError):
                     pass
+        health_ok = check_port_health(port_map.get(name, 0)) if status == "running" else False
         return {"name": name, "status": status, "pid": 0,
-                "uptime": 0, "restarts": 0, "memory": mem, "cpu": cpu}
+                "uptime": 0, "restarts": 0, "memory": mem, "cpu": cpu, "health_ok": health_ok}
 
 
 def check_napcat_error():
