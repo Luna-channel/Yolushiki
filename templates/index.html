@@ -1737,7 +1737,7 @@
         }
 
         // 下载类阶段列表
-        const DOWNLOAD_STAGES = ['docker_pull', 'git_clone', 'npm_install'];
+        const DOWNLOAD_STAGES = ['docker_pull', 'git_clone', 'npm_install', 'dep_pm2'];
         
         function checkInstallStatus() {
             fetch('/api/status')
@@ -1779,9 +1779,11 @@
                             titleEl.textContent = 'GitHub 加速';
                             descEl.textContent = '如果 git clone 很慢（速度仅几十 KB/s 或长时间无进度），可使用 GitHub 加速代理。切换后自动重试当前步骤。';
                             gitOpts.classList.remove('hidden');
-                        } else if (cs === 'npm_install') {
-                            titleEl.textContent = 'npm 镜像加速';
-                            descEl.textContent = '如果 npm install 很慢或显示超时错误，可切换 npm 镜像源加速。切换后自动重试当前步骤。';
+                        } else if (cs === 'npm_install' || cs === 'dep_pm2') {
+                            titleEl.textContent = cs === 'dep_pm2' ? 'PM2 安装加速（npm 镜像）' : 'npm 镜像加速';
+                            descEl.textContent = cs === 'dep_pm2'
+                                ? 'PM2 安装需要访问 npm 源，如果显示网络错误（ENOTFOUND），请切换为国内 npm 镜像源。切换后自动重试。'
+                                : '如果 npm install 很慢或显示超时错误，可切换 npm 镜像源加速。切换后自动重试当前步骤。';
                             npmOpts.classList.remove('hidden');
                         }
                         lucide.createIcons();
@@ -1816,9 +1818,11 @@
                                 titleEl.textContent = 'GitHub 加速';
                                 descEl.textContent = 'Git 克隆失败，可使用 GitHub 加速代理后重试。';
                                 gitOpts.classList.remove('hidden');
-                            } else if (cs === 'npm_install') {
-                                titleEl.textContent = 'npm 镜像加速';
-                                descEl.textContent = 'npm 安装失败，可切换 npm 镜像源后重试。';
+                            } else if (cs === 'npm_install' || cs === 'dep_pm2') {
+                                titleEl.textContent = cs === 'dep_pm2' ? 'PM2 安装加速（npm 镜像）' : 'npm 镜像加速';
+                                descEl.textContent = cs === 'dep_pm2'
+                                    ? 'PM2 安装失败（npm 无法访问），请切换为国内 npm 镜像源后重试。'
+                                    : 'npm 安装失败，可切换 npm 镜像源后重试。';
                                 npmOpts.classList.remove('hidden');
                             }
                             lucide.createIcons();

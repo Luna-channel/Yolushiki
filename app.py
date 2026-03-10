@@ -1885,6 +1885,20 @@ def retry_current_stage():
                     raise Exception("SillyTavern部署失败")
                 _finish_install(current_gen)
 
+            elif current_stage == "dep_pm2":
+                install_status["message"] = "重试安装 PM2..."
+                install_status["current_stage"] = "dep_pm2"
+                if not install_pm2():
+                    raise Exception("PM2安装失败")
+                log("PM2 安装成功，继续后续部署...")
+                # PM2安装后继续部署 SillyTavern
+                if config.get("install_tavern", True):
+                    install_status["progress"] = 65
+                    install_status["message"] = "部署 SillyTavern..."
+                    if not deploy_sillytavern():
+                        raise Exception("SillyTavern部署失败")
+                _finish_install(current_gen)
+
             elif current_stage == "npm_install":
                 install_status["message"] = "重试安装 npm 依赖..."
                 install_status["current_stage"] = "npm_install"
