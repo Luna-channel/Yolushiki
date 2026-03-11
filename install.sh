@@ -38,15 +38,23 @@ spin() {
         local spinstr=$temp${spinstr%"$temp"}
         sleep 0.1
     done
-    printf "\r      ${GREEN}✓${NC}  %s      \n" "$msg"
+    wait $pid
+    local exit_code=$?
+    if [ $exit_code -eq 0 ]; then
+        printf "\r      ${GREEN}✓${NC}  %s      \n" "$msg"
+    else
+        printf "\r      ${RED}✗${NC}  %s [失败]      \n" "$msg"
+    fi
+    return $exit_code
 }
 
-# 带进度的命令执行
+# 带进度的命令执行（错误输出记录到日志）
 run_with_spinner() {
     local msg=$1
     shift
-    "$@" > /dev/null 2>&1 &
+    "$@" >> "$LOG_FILE" 2>&1 &
     spin $! "$msg"
+    return $?
 }
 clear
 echo -e "${CYAN}"
@@ -250,7 +258,17 @@ if [ "$NEED_INSTALL" -eq 1 ]; then
     # 安装Flask
     if ! python3 -c "import flask" 2>/dev/null; then
         case "$OS_FAMILY" in
-            debian) run_with_spinner "安装 Flask..." pkg_install python3-flask ;;
+            debian)
+                run_with_spinner "安装 Flask (apt)..." pkg_install python3-flask
+                # apt 安装失败时 fallback 到 pip
+                if ! python3 -c "import flask" 2>/dev/null; then
+                    echo -e "      ${YELLOW}⚠${NC}  apt 安装失败，尝试 pip 安装..."
+                    echo "======== apt python3-flask 失败，fallback pip ========" >> "$LOG_FILE"
+                    PIP_CMD="pip3"
+                    command -v pip3 &> /dev/null || PIP_CMD="pip"
+                    run_with_spinner "安装 Flask (pip)..." $PIP_CMD install flask --break-system-packages
+                fi
+                ;;
             *)
                 # 非Debian系统用pip安装Flask
                 PIP_CMD="pip3"
@@ -266,6 +284,10 @@ if [ "$NEED_INSTALL" -eq 1 ]; then
     else
         echo "" >> "$LOG_FILE"
         echo "======== Flask 安装失败 ========" >> "$LOG_FILE"
+        echo "Python3 路径: $(which python3 2>/dev/null || echo '未找到')" >> "$LOG_FILE"
+        echo "pip3 路径: $(which pip3 2>/dev/null || echo '未找到')" >> "$LOG_FILE"
+        echo "pip 路径: $(which pip 2>/dev/null || echo '未找到')" >> "$LOG_FILE"
+        python3 -c "import flask" >> "$LOG_FILE" 2>&1 || true
         echo "结束时间: $(date)" >> "$LOG_FILE"
         
         echo ""
