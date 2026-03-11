@@ -25,6 +25,10 @@ LOG_FILE="/tmp/yolushiki_install.log"
 # 初始化日志文件
 echo "======== 夜鹭机安装日志 ========" > "$LOG_FILE"
 echo "开始时间: $(date)" >> "$LOG_FILE"
+echo "系统: $(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d'"' -f2)" >> "$LOG_FILE"
+echo "内核: $(uname -r)" >> "$LOG_FILE"
+echo "Python3: $(python3 --version 2>&1 || echo '未安装')" >> "$LOG_FILE"
+echo "pip3: $(pip3 --version 2>&1 || echo '未安装')" >> "$LOG_FILE"
 echo "" >> "$LOG_FILE"
 
 # 加载动画函数
@@ -159,6 +163,56 @@ else
     exit 1
 fi
 
+# 检查 apt 锁是否被占用
+is_apt_locked() {
+    if command -v fuser &> /dev/null; then
+        fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+        fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+        fuser /var/cache/apt/archives/lock >/dev/null 2>&1
+    else
+        lsof /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+        lsof /var/lib/apt/lists/lock >/dev/null 2>&1
+    fi
+}
+
+# 修复包管理器 + 等待锁释放（只对 debian 系生效，在依赖安装前调用一次）
+repair_package_manager() {
+    [ "$OS_FAMILY" != "debian" ] && return 0
+
+    # 1. 等待 apt 锁释放
+    local max_wait=120
+    local waited=0
+    while is_apt_locked; do
+        if [ $waited -eq 0 ]; then
+            echo -e "      ${YELLOW}⚠${NC}  检测到系统正在自动更新，等待完成..."
+            echo "检测到 dpkg/apt 锁，等待释放..." >> "$LOG_FILE"
+        fi
+        sleep 3
+        waited=$((waited + 3))
+        if [ $waited -ge $max_wait ]; then
+            echo -e "      ${YELLOW}⚠${NC}  等待超时(${max_wait}s)，强制继续"
+            echo "apt 锁等待超时 ${max_wait}s" >> "$LOG_FILE"
+            break
+        fi
+    done
+    if [ $waited -gt 0 ] && [ $waited -lt $max_wait ]; then
+        echo -e "      ${GREEN}✓${NC}  系统更新已完成"
+    fi
+
+    # 2. 修复可能损坏的 dpkg
+    if dpkg --audit 2>&1 | grep -qi "."; then
+        echo -e "      ${YELLOW}⚠${NC}  检测到包管理器异常，正在修复..."
+        echo "dpkg audit 发现问题，执行 dpkg --configure -a" >> "$LOG_FILE"
+        dpkg --configure -a >> "$LOG_FILE" 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "      ${GREEN}✓${NC}  包管理器修复完成"
+        else
+            echo -e "      ${RED}✗${NC}  包管理器修复失败，继续尝试..."
+            echo "dpkg --configure -a 失败" >> "$LOG_FILE"
+        fi
+    fi
+}
+
 # 通用包安装函数
 pkg_update() {
     case "$OS_FAMILY" in
@@ -170,8 +224,16 @@ pkg_update() {
 }
 
 pkg_install() {
+    local retries=2
     case "$OS_FAMILY" in
-        debian)  apt-get install -y -qq "$@" ;;
+        debian)
+            for i in $(seq 1 $retries); do
+                apt-get install -y -qq "$@" && return 0
+                echo "apt-get install $@ 失败 (第${i}次)" >> "$LOG_FILE"
+                [ $i -lt $retries ] && sleep 2
+            done
+            return 1
+            ;;
         rhel|fedora) $PKG_MANAGER install -y -q "$@" ;;
         arch)    pacman -S --noconfirm --needed "$@" ;;
         suse)    zypper install -y -n "$@" ;;
@@ -182,7 +244,13 @@ pkg_install() {
 for cmd in curl git; do
     if ! command -v $cmd &> /dev/null; then
         echo -e "      ${YELLOW}⚠${NC}  $cmd 未安装，正在安装..."
-        pkg_install $cmd > /dev/null 2>&1
+        pkg_install $cmd >> "$LOG_FILE" 2>&1
+        if command -v $cmd &> /dev/null; then
+            echo -e "      ${GREEN}✓${NC}  $cmd 安装完成"
+        else
+            echo -e "      ${RED}✗${NC}  $cmd 安装失败"
+            echo "$cmd 安装失败" >> "$LOG_FILE"
+        fi
     fi
 done
 
@@ -231,6 +299,9 @@ if [ "$NEED_INSTALL" -eq 1 ]; then
     echo -e "${BLUE}[3/5]${NC} 安装缺失依赖..."
     echo -e "      ${YELLOW}⚠${NC}  这个过程大约需要 5 分钟，请耐心等待，不要中断或关闭终端！"
     echo ""
+
+    # 修复包管理器（处理 dpkg interrupted 和 apt 锁）
+    repair_package_manager
     
     # 更新软件包列表
     run_with_spinner "更新软件包列表..." pkg_update
@@ -264,9 +335,31 @@ if [ "$NEED_INSTALL" -eq 1 ]; then
                 if ! python3 -c "import flask" 2>/dev/null; then
                     echo -e "      ${YELLOW}⚠${NC}  apt 安装失败，尝试 pip 安装..."
                     echo "======== apt python3-flask 失败，fallback pip ========" >> "$LOG_FILE"
-                    PIP_CMD="pip3"
-                    command -v pip3 &> /dev/null || PIP_CMD="pip"
-                    run_with_spinner "安装 Flask (pip)..." $PIP_CMD install flask --break-system-packages
+                    # 确保 pip 可用：尝试多种方式恢复 pip
+                    if ! command -v pip3 &> /dev/null && ! command -v pip &> /dev/null; then
+                        echo "pip 不可用，尝试恢复..." >> "$LOG_FILE"
+                        # 方法1: ensurepip
+                        python3 -m ensurepip --upgrade >> "$LOG_FILE" 2>&1 || true
+                        # 方法2: 安装 python3-pip 包
+                        if ! command -v pip3 &> /dev/null; then
+                            apt-get install -y -qq python3-pip >> "$LOG_FILE" 2>&1 || true
+                        fi
+                        # 方法3: get-pip.py
+                        if ! command -v pip3 &> /dev/null && ! python3 -m pip --version >> "$LOG_FILE" 2>&1; then
+                            echo "尝试 get-pip.py..." >> "$LOG_FILE"
+                            curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py >> "$LOG_FILE" 2>&1 && \
+                            python3 /tmp/get-pip.py --break-system-packages >> "$LOG_FILE" 2>&1 || true
+                            rm -f /tmp/get-pip.py
+                        fi
+                    fi
+                    # 按优先级尝试安装 Flask
+                    if command -v pip3 &> /dev/null; then
+                        run_with_spinner "安装 Flask (pip3)..." pip3 install flask --break-system-packages
+                    elif command -v pip &> /dev/null; then
+                        run_with_spinner "安装 Flask (pip)..." pip install flask --break-system-packages
+                    else
+                        run_with_spinner "安装 Flask (python3 -m pip)..." python3 -m pip install flask --break-system-packages
+                    fi
                 fi
                 ;;
             *)

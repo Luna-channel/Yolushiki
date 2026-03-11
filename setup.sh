@@ -61,27 +61,30 @@ fi
 
 echo -e "${BLUE}[1/3]${NC} 检查环境..."
 
-# 安装 curl（如果没有）
-if ! command -v curl &> /dev/null; then
-    echo -e "      ${YELLOW}⚠${NC}  curl 未安装，正在安装..."
-    case "$PKG_MANAGER" in
-        apt-get)  apt-get update -qq && apt-get install -y -qq curl ;;
-        dnf|yum)  $PKG_MANAGER install -y -q curl ;;
-        pacman)   pacman -Sy --noconfirm curl ;;
-        zypper)   zypper install -y -n curl ;;
-    esac > /dev/null 2>&1
+# 对 apt-get 系统先修复 dpkg（防止上次安装中断导致包管理器损坏）
+if [ "$PKG_MANAGER" = "apt-get" ]; then
+    if dpkg --audit 2>&1 | grep -qi "."; then
+        echo -e "      ${YELLOW}⚠${NC}  修复包管理器..."
+        dpkg --configure -a > /dev/null 2>&1 || true
+    fi
 fi
 
-# 安装 git（如果没有）
-if ! command -v git &> /dev/null; then
-    echo -e "      ${YELLOW}⚠${NC}  git 未安装，正在安装..."
-    case "$PKG_MANAGER" in
-        apt-get)  apt-get update -qq && apt-get install -y -qq git ;;
-        dnf|yum)  $PKG_MANAGER install -y -q git ;;
-        pacman)   pacman -Sy --noconfirm git ;;
-        zypper)   zypper install -y -n git ;;
-    esac > /dev/null 2>&1
-fi
+# 安装 curl 和 git
+for cmd in curl git; do
+    if ! command -v $cmd &> /dev/null; then
+        echo -e "      ${YELLOW}⚠${NC}  $cmd 未安装，正在安装..."
+        case "$PKG_MANAGER" in
+            apt-get)  apt-get update -qq && apt-get install -y -qq $cmd ;;
+            dnf|yum)  $PKG_MANAGER install -y -q $cmd ;;
+            pacman)   pacman -Sy --noconfirm $cmd ;;
+            zypper)   zypper install -y -n $cmd ;;
+        esac > /dev/null 2>&1
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "      ${RED}✗${NC}  $cmd 安装失败，请手动安装后重试"
+            exit 1
+        fi
+    fi
+done
 
 echo -e "      ${GREEN}✓${NC}  环境检查完成"
 
@@ -155,7 +158,7 @@ echo ""
 echo -e "${BLUE}[3/3]${NC} 验证文件完整性..."
 
 MISSING=0
-for f in app.py install.sh templates/index.html templates/login.html; do
+for f in app.py install.sh templates/index.html templates/login.html templates/tutorial_napcat.html templates/tutorial_astrbot.html templates/tutorial_tavern.html templates/tutorial_server.html; do
     if [ ! -f "$INSTALL_DIR/$f" ]; then
         echo -e "      ${RED}✗${NC}  缺少文件: $f"
         MISSING=1
