@@ -2168,9 +2168,22 @@
         async function openNapCat() {
             if (napCatTokenData && napCatTokenData.url) {
                 window.open(napCatTokenData.url, '_blank');
-            } else {
-                openService('napcat');
+                return;
             }
+            // Token 未加载，先尝试获取
+            try {
+                const res = await fetch('/api/napcat/token');
+                const data = await res.json();
+                napCatTokenData = data;
+                if (data.url) {
+                    window.open(data.url, '_blank');
+                    return;
+                }
+            } catch(e) { /* ignore */ }
+            // 兜底：至少带上 /webui 路径
+            let ip = document.getElementById('sys-ip')?.textContent;
+            if (!ip || ip === '--' || ip === '未知') ip = CONFIG.server_ip || window.location.hostname;
+            window.open('http://' + ip + ':' + (CONFIG.napcat_port || 6099) + '/webui', '_blank');
         }
 
         async function fetchNapCatToken() {

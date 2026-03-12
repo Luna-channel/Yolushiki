@@ -767,12 +767,14 @@ disableCsrfProtection: false
 
 def generate_astrbot_yml():
     """生成 astrbot.yml 内容（统一维护，避免多处重复）"""
-    return '''services:
+    napcat_port = config.get("napcat_port", 6099)
+    astrbot_port = config.get("astrbot_port", 6185)
+    return f'''services:
   napcat:
     environment:
       - MODE=astrbot
     ports:
-      - 6099:6099
+      - {napcat_port}:6099
     container_name: napcat
     restart: always
     image: mlikiowa/napcat-docker:latest
@@ -782,6 +784,12 @@ def generate_astrbot_yml():
       - ./ntqq:/app/.config/QQ
     networks:
       - astrbot_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:6099/webui || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging:
       driver: json-file
       options:
@@ -794,11 +802,17 @@ def generate_astrbot_yml():
     container_name: astrbot
     restart: always
     ports:
-      - "6185:6185"
+      - "{astrbot_port}:6185"
     volumes:
       - ./data:/AstrBot/data
     networks:
       - astrbot_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:6185/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
