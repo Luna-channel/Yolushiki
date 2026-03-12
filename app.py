@@ -92,31 +92,91 @@ runtime_mirrors = {
     "git_proxy": "",          # 空=直连GitHub, 或 https://gh.llkk.cc/
 }
 
-# 插件列表
+# 插件列表（按分类排列，顺序决定前端渲染顺序）
 ASTRBOT_PLUGINS = [
+    # ── 必装 ──
     {
-        "name": "日志拓展插件",
+        "name": "日志拓展插件 (LogPlus)",
         "repo": "https://github.com/lxfight/astrbot_plugin_logplus.git",
         "description": "排错必备，详细日志记录",
-        "selected": True
+        "category": "必装",
+        "selected": True,
+        "required": True
     },
-    {
-        "name": "Conversa 主动回复",
-        "repo": "https://github.com/Luna-channel/astrbot_plugin_Conversa.git",
-        "description": "LLM主动问候回复功能",
-        "selected": True
-    },
+    # ── 机器人管理类 ──
     {
         "name": "人际关系管理",
         "repo": "https://github.com/Zhalslar/astrbot_plugin_relationship.git",
-        "description": "好友/群管理功能",
+        "description": "管理好友关系",
+        "category": "机器人管理类",
         "selected": True
     },
     {
-        "name": "好感度Pro",
-        "repo": "https://github.com/Luna-channel/astrbot_plugin_favourpro.git",
-        "description": "伪记忆/好感度系统",
+        "name": "QQ群管",
+        "repo": "https://github.com/Zhalslar/astrbot_plugin_qqadmin.git",
+        "description": "QQ群管理功能",
+        "category": "机器人管理类",
         "selected": True
+    },
+    {
+        "name": "使用状况查看",
+        "repo": "https://github.com/Luna-channel/astrbot_plugin_hangout.git",
+        "description": "查看机器人使用状况统计",
+        "category": "机器人管理类",
+        "selected": False
+    },
+    # ── 聊天优化类 ──
+    {
+        "name": "Conversa 主动回复",
+        "repo": "https://github.com/Luna-channel/astrbot_plugin_Conversa.git",
+        "description": "LLM主动问候回复，适合机器人好友多的情况",
+        "category": "聊天优化类",
+        "selected": True,
+        "conflict_note": "⚠️ 可能与「群聊主动回复Plus」冲突，建议二选一"
+    },
+    {
+        "name": "群聊主动回复Plus",
+        "repo": "https://github.com/Him666233/astrbot_plugin_group_chat_plus.git",
+        "description": "主动回复，更适合私聊场景",
+        "category": "聊天优化类",
+        "selected": False,
+        "conflict_note": "⚠️ 可能与「Conversa 主动回复」冲突，建议二选一"
+    },
+    {
+        "name": "随机回复",
+        "repo": "https://github.com/Luna-channel/astrbot_plugin_Random_Reply.git",
+        "description": "群聊防止机器人无限聊天",
+        "category": "聊天优化类",
+        "selected": True
+    },
+    {
+        "name": "用户画像记忆 (SoulMap)",
+        "repo": "https://github.com/Luna-channel/astrbot_plugin_soulmap.git",
+        "description": "用户画像记忆辅助系统",
+        "category": "聊天优化类",
+        "selected": False
+    },
+    {
+        "name": "好感度Pro（鸭版）",
+        "repo": "https://github.com/Luna-channel/astrbot_plugin_favourpro.git",
+        "description": "好感度系统",
+        "category": "聊天优化类",
+        "selected": True
+    },
+    # ── 其他功能类 ──
+    {
+        "name": "QQ群总结分析",
+        "repo": "https://github.com/SXP-Simon/astrbot_plugin_qq_group_daily_analysis.git",
+        "description": "QQ群聊天总结分析",
+        "category": "其他功能类",
+        "selected": False
+    },
+    {
+        "name": "表情包发送",
+        "repo": "https://github.com/LunarMeal/astrbot_plugin_memes.git",
+        "description": "发送表情包（类似插件很多，也可在插件市场自选）",
+        "category": "其他功能类",
+        "selected": False
     }
 ]
 

@@ -289,6 +289,47 @@
         .plugin-item .info { flex: 1; }
         .plugin-item .name { font-weight: 500; color: #fff; margin-bottom: 2px; }
         .plugin-item .desc { font-size: 0.82rem; color: var(--text-secondary); }
+        .plugin-item.plugin-required { border-left: 3px solid var(--accent-green); }
+        .plugin-category-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0 6px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--accent-blue-light);
+            border-bottom: 1px solid rgba(74,142,207,0.15);
+            margin-top: 10px;
+        }
+        .plugin-category-header:first-child { margin-top: 0; }
+        .plugin-category-header i { width: 16px; height: 16px; }
+        .plugin-badge {
+            font-size: 0.68rem;
+            padding: 1px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .plugin-badge.required { background: rgba(39,174,96,0.15); color: var(--accent-green); }
+        .plugin-badge.auto { background: rgba(74,142,207,0.15); color: var(--accent-blue-light); }
+        .plugin-conflict-note {
+            font-size: 0.75rem;
+            color: var(--accent-yellow);
+            margin-top: 3px;
+        }
+        .plugin-tip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: rgba(74,142,207,0.08);
+            border-radius: 8px;
+            font-size: 0.82rem;
+            color: var(--accent-blue-light);
+            margin-top: 6px;
+        }
+        .plugin-tip i { width: 16px; height: 16px; flex-shrink: 0; }
 
         .btn {
             display: inline-flex;
@@ -922,15 +963,29 @@
                         <label for="install-plugins">预装 AstrBot 插件</label>
                     </div>
                     <div class="plugin-list" id="plugins-list" style="margin-top: 8px;">
+                        {% set ns = namespace(current_cat='') %}
                         {% for plugin in plugins %}
-                        <label class="plugin-item">
-                            <input type="checkbox" name="plugin" value="{{ loop.index0 }}" {% if plugin.selected %}checked{% endif %}>
+                        {% if plugin.category != ns.current_cat %}
+                        {% set ns.current_cat = plugin.category %}
+                        <div class="plugin-category-header">
+                            <i data-lucide="{% if plugin.category == '必装' %}shield-check{% elif plugin.category == '机器人管理类' %}settings{% elif plugin.category == '聊天优化类' %}message-circle{% else %}puzzle{% endif %}"></i>
+                            {{ plugin.category }}
+                            {% if plugin.category == '必装' %}<span class="plugin-badge auto">自动勾选</span>{% endif %}
+                        </div>
+                        {% endif %}
+                        <label class="plugin-item{% if plugin.get('required', False) %} plugin-required{% endif %}">
+                            <input type="checkbox" name="plugin" value="{{ loop.index0 }}" {% if plugin.selected %}checked{% endif %}{% if plugin.get('required', False) %} data-required="true"{% endif %}>
                             <div class="info">
-                                <div class="name">{{ plugin.name }}</div>
+                                <div class="name">{{ plugin.name }}{% if plugin.get('required', False) %} <span class="plugin-badge required">必装</span>{% endif %}</div>
                                 <div class="desc">{{ plugin.description }}</div>
+                                {% if plugin.get('conflict_note', '') %}<div class="plugin-conflict-note">{{ plugin.conflict_note }}</div>{% endif %}
                             </div>
                         </label>
                         {% endfor %}
+                        <div class="plugin-tip">
+                            <i data-lucide="info"></i>
+                            <span>安装完成后，记得在 AstrBot 管理面板中查看每个插件的设置哦~</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1673,6 +1728,11 @@
                     pluginsList.style.display = installPlugins.checked ? 'block' : 'none';
                 });
             }
+            
+            // 必装插件不可取消勾选
+            document.querySelectorAll('input[name="plugin"][data-required="true"]').forEach(cb => {
+                cb.addEventListener('change', () => { if (!cb.checked) cb.checked = true; });
+            });
             
             try {
                 const res = await fetch('/api/auth/check');
