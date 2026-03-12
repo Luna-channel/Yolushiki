@@ -228,7 +228,7 @@ pkg_install() {
     case "$OS_FAMILY" in
         debian)
             for i in $(seq 1 $retries); do
-                apt-get install -y -qq "$@" && return 0
+                DEBIAN_FRONTEND=noninteractive apt-get install -y -qq -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" "$@" && return 0
                 echo "apt-get install $@ 失败 (第${i}次)" >> "$LOG_FILE"
                 [ $i -lt $retries ] && sleep 2
             done
@@ -261,6 +261,7 @@ if [ "$MEM_TOTAL" -lt 1800 ]; then
 else
     echo -e "      ${GREEN}✓${NC} 内存: ${MEM_TOTAL}MB"
 fi
+
 
 echo -e "${BLUE}[2/5]${NC} 检查依赖环境..."
 echo ""
@@ -527,7 +528,7 @@ if command -v pm2 &> /dev/null; then
         pm2 start yolushiki > /dev/null 2>&1
         echo -e "${GREEN}✓${NC} 夜鹭机管理面板已重启"
     else
-        pm2 start "$YOLUSHIKI_DIR/app.py" --name "yolushiki" --interpreter python3 --max-memory-restart 300M -- --port $INSTALLER_PORT --host 0.0.0.0 > /dev/null 2>&1
+        pm2 start "$YOLUSHIKI_DIR/app.py" --name "yolushiki" --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0 > /dev/null 2>&1
         pm2 save > /dev/null 2>&1
         pm2 startup >> "$LOG_FILE" 2>&1 || echo "pm2 startup 可能未成功，请手动执行 pm2 startup 输出的命令" >> "$LOG_FILE"
         echo -e "${GREEN}✓${NC} 夜鹭机管理面板已启动"

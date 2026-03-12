@@ -137,7 +137,7 @@ ASTRBOT_PLUGINS = [
     {
         "name": "群聊主动回复Plus",
         "repo": "https://github.com/Him666233/astrbot_plugin_group_chat_plus.git",
-        "description": "主动回复，更适合私聊场景",
+        "description": "功能强大的主动回复，token消耗高，设置复杂但非常强大",
         "category": "聊天优化类",
         "selected": False,
         "conflict_note": "⚠️ 可能与「Conversa 主动回复」冲突，建议二选一"
@@ -419,7 +419,7 @@ def service_action(name, action):
                 # 进程不存在，重新创建
                 run_command("pm2 delete sillytavern 2>/dev/null || true", quiet=True)
                 ok, out = run_command(
-                    'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
+                    'pm2 start server.js --name "sillytavern"',
                     cwd="/opt/sillytavern", quiet=True
                 )
             run_command("pm2 save", quiet=True)
@@ -813,10 +813,6 @@ def generate_astrbot_yml():
       timeout: 10s
       retries: 3
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -939,7 +935,7 @@ def deploy_sillytavern():
     log("使用PM2启动SillyTavern...")
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
-        'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
+        'pm2 start server.js --name "sillytavern"',
         cwd=tavern_dir
     )
     if success:
@@ -2062,7 +2058,7 @@ def _continue_sillytavern_config(tavern_dir):
     log("使用PM2启动SillyTavern...")
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
-        'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
+        'pm2 start server.js --name "sillytavern"',
         cwd=tavern_dir
     )
     if success:
