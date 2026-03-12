@@ -527,9 +527,9 @@ if command -v pm2 &> /dev/null; then
         pm2 start yolushiki > /dev/null 2>&1
         echo -e "${GREEN}✓${NC} 夜鹭机管理面板已重启"
     else
-        pm2 start "$YOLUSHIKI_DIR/app.py" --name "yolushiki" --interpreter python3 -- --port $INSTALLER_PORT --host 0.0.0.0 > /dev/null 2>&1
+        pm2 start "$YOLUSHIKI_DIR/app.py" --name "yolushiki" --interpreter python3 --max-memory-restart 300M -- --port $INSTALLER_PORT --host 0.0.0.0 > /dev/null 2>&1
         pm2 save > /dev/null 2>&1
-        pm2 startup > /dev/null 2>&1 || true
+        pm2 startup >> "$LOG_FILE" 2>&1 || echo "pm2 startup 可能未成功，请手动执行 pm2 startup 输出的命令" >> "$LOG_FILE"
         echo -e "${GREEN}✓${NC} 夜鹭机管理面板已启动"
     fi
     echo -e "   访问地址: ${WEBUI_URL}"

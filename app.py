@@ -408,13 +408,21 @@ def service_action(name, action):
     if name == "sillytavern":
         if action == "restart":
             ok, out = run_command("pm2 restart sillytavern", quiet=True)
+            run_command("pm2 save", quiet=True)
         elif action == "stop":
             ok, out = run_command("pm2 stop sillytavern", quiet=True)
+            run_command("pm2 save", quiet=True)
         elif action == "start":
-            ok, out = run_command(
-                'pm2 start server.js --name "sillytavern"',
-                cwd="/opt/sillytavern", quiet=True
-            )
+            # 先尝试启动已有的 stopped 进程，避免 pm2 start server.js 创建重复进程
+            ok, out = run_command("pm2 start sillytavern", quiet=True)
+            if not ok:
+                # 进程不存在，重新创建
+                run_command("pm2 delete sillytavern 2>/dev/null || true", quiet=True)
+                ok, out = run_command(
+                    'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
+                    cwd="/opt/sillytavern", quiet=True
+                )
+            run_command("pm2 save", quiet=True)
         else:
             return False, "未知操作"
         _status_cache["data"] = None  # 清除缓存，操作后立即刷新
@@ -438,13 +446,8 @@ def get_service_logs(name, lines=50):
     if name == "sillytavern":
         ok, output = run_command(f"pm2 logs sillytavern --nostream --lines {lines}", quiet=True)
     else:
-        ok, output = run_command(f"docker logs --tail {lines} {name}", quiet=True)
-        if not ok:
-            # docker logs 有时输出到 stderr
-            ok2, output2 = run_command(f"docker logs --tail {lines} {name} 2>&1", quiet=True)
-            if ok2:
-                output = output2
-                ok = True
+        # docker logs 输出到 stderr，必须用 2>&1 合并
+        ok, output = run_command(f"docker logs --tail {lines} {name} 2>&1", quiet=True)
     return output if ok else "无法获取日志"
 
 
@@ -573,6 +576,8 @@ def install_docker():
     success, output = run_command("docker --version", quiet=True)
     if success:
         log(f"Docker已安装: {output.strip()}")
+        # 确保 Docker 开机自启（预装的 Docker 可能未 enable）
+        run_command("systemctl enable docker", quiet=True)
         return True
     log("Docker未安装，开始安装...")
     success, _ = run_command("curl -fsSL https://get.docker.com | bash")
@@ -920,12 +925,17 @@ def deploy_sillytavern():
     log("使用PM2启动SillyTavern...")
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
-        'pm2 start server.js --name "sillytavern"',
+        'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
         cwd=tavern_dir
     )
     if success:
         run_command("pm2 save", quiet=True)
-        run_command("pm2 startup 2>/dev/null || true", quiet=True)
+        # 配置 PM2 开机自启（记录结果，失败时用户可手动执行）
+        startup_ok, startup_out = run_command("pm2 startup", quiet=True)
+        if startup_ok:
+            log("PM2 开机自启已配置")
+        else:
+            log("PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）")
         time.sleep(5)  # 等待 SillyTavern 初始化存储
         alive, status_output = run_command("pm2 show sillytavern")
         if alive and "online" in status_output.lower():
@@ -1090,6 +1100,8 @@ def do_install(generation):
         if ok:
             log(f"Docker 已安装: {out.strip()}")
             has_docker = True
+            # 确保 Docker 开机自启（预装的 Docker 可能未 enable）
+            run_command("systemctl enable docker", quiet=True)
         else:
             log("Docker 未安装")
 
@@ -1268,6 +1280,12 @@ def do_install(generation):
                     quiet=True
                 )
                 run_command("pm2 save", quiet=True)
+        # 确保 PM2 开机自启（无论是否安装了酒馆）
+        startup_ok, _ = run_command("pm2 startup", quiet=True)
+        if startup_ok:
+            log("PM2 开机自启已配置")
+        else:
+            log("PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）")
 
         install_status["progress"] = 100
         install_status["message"] = "安装完成！"
@@ -1564,12 +1582,13 @@ def api_services_installed():
 @login_required
 def api_service_reinstall(name):
     """重装单个服务"""
-    global install_status, install_generation
+    global install_status, install_generation, _log_bytes
     valid_names = {"napcat", "astrbot", "sillytavern"}
     if name not in valid_names:
         return jsonify({"error": f"未知服务: {name}"}), 400
     
     install_generation += 1
+    _log_bytes = 0
     install_status = {
         "stage": "installing",
         "progress": 0,
@@ -1805,8 +1824,9 @@ def get_install_status():
 @app.route("/api/config")
 @login_required
 def api_get_config():
-    """获取当前配置（不含 Token）"""
-    safe_config = {k: v for k, v in config.items() if k != "token"}
+    """获取当前配置（排除敏感字段）"""
+    sensitive_keys = {"token", "secret_key"}
+    safe_config = {k: v for k, v in config.items() if k not in sensitive_keys}
     return jsonify(safe_config)
 
 
@@ -2028,12 +2048,16 @@ def _continue_sillytavern_config(tavern_dir):
     log("使用PM2启动SillyTavern...")
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
-        'pm2 start server.js --name "sillytavern"',
+        'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
         cwd=tavern_dir
     )
     if success:
         run_command("pm2 save", quiet=True)
-        run_command("pm2 startup 2>/dev/null || true", quiet=True)
+        startup_ok, _ = run_command("pm2 startup", quiet=True)
+        if startup_ok:
+            log("PM2 开机自启已配置")
+        else:
+            log("PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）")
         time.sleep(5)
         alive, status_output = run_command("pm2 show sillytavern")
         if alive and "online" in status_output.lower():
@@ -2123,6 +2147,12 @@ def _finish_install(generation):
                 quiet=True
             )
             run_command("pm2 save", quiet=True)
+    # 确保 PM2 开机自启（无论是否安装了酒馆，此处是所有安装路径的必经之处）
+    startup_ok, _ = run_command("pm2 startup", quiet=True)
+    if startup_ok:
+        log("PM2 开机自启已配置")
+    else:
+        log("PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）")
     install_status["progress"] = 100
     install_status["message"] = "安装完成！"
     install_status["stage"] = "completed"
@@ -2134,10 +2164,10 @@ def _finish_install(generation):
 @login_required
 def start_install():
     """开始安装"""
-    global install_status
-    global install_generation
+    global install_status, install_generation, _log_bytes
     install_generation += 1
     current_gen = install_generation
+    _log_bytes = 0
     install_status = {
         "stage": "installing",
         "progress": 0,

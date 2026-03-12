@@ -2476,7 +2476,7 @@
         async function confirmReinstall(type) {
             if (type === 'tavern') {
                 const modal = document.getElementById('reinstall-tavern-modal');
-                document.getElementById('reinstall-tavern-port').value = 18880;
+                document.getElementById('reinstall-tavern-port').value = CONFIG.tavern_port || 18888;
                 document.getElementById('reinstall-tavern-username').value = '';
                 document.getElementById('reinstall-tavern-password').value = '';
                 document.getElementById('reinstall-tavern-password-confirm').value = '';
