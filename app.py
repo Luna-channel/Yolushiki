@@ -4,7 +4,7 @@
 夜鹭机 管理面板 (Phase 2)
 """
 
-VERSION = "0.3.0"
+VERSION = "1.0.2"
 
 import glob
 import json
