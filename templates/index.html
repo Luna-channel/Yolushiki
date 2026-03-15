@@ -1064,7 +1064,7 @@
                 <h2><i data-lucide="server"></i> 系统信息</h2>
                 <div class="sys-grid">
                     <div class="sys-item">
-                        <div class="sys-label"><i data-lucide="globe"></i> 服务器 IP</div>
+                        <div class="sys-label"><i data-lucide="globe"></i> 服务器 IP <button class="svc-btn" onclick="refreshPublicIP()" style="padding:2px 8px;font-size:0.7rem;margin-left:8px;" title="重新获取公网IP"><i data-lucide="refresh-cw" style="width:12px;height:12px;"></i></button></div>
                         <div class="sys-value" id="sys-ip">--</div>
                     </div>
                     <div class="sys-item">
@@ -2111,6 +2111,26 @@
         }
 
         // ===== 仪表盘：系统信息 =====
+        async function refreshPublicIP() {
+            const ipEl = document.getElementById('sys-ip');
+            const origText = ipEl.textContent;
+            ipEl.textContent = '获取中...';
+            try {
+                const res = await fetch('/api/system/refresh-ip', { method: 'POST' });
+                const data = await res.json();
+                if (data.success && data.ip) {
+                    ipEl.textContent = data.ip;
+                    showDialog('success', 'IP已更新', data.message);
+                } else {
+                    ipEl.textContent = origText;
+                    showDialog('error', '获取失败', data.message || '无法获取公网IP，请检查服务器网络');
+                }
+            } catch(e) {
+                ipEl.textContent = origText;
+                showDialog('error', '请求失败', '网络错误: ' + e.message);
+            }
+        }
+
         async function refreshSystemInfo() {
             try {
                 const res = await fetch('/api/system/info');
