@@ -10,13 +10,15 @@ import glob
 import json
 import os
 import secrets
+import shutil
 import subprocess
+import tarfile
 import threading
 import time
 import socket
 import functools
 import hashlib
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for, send_file
 
 app = Flask(__name__)
 
@@ -123,7 +125,7 @@ ASTRBOT_PLUGINS = [
         "repo": "https://github.com/Luna-channel/astrbot_plugin_hangout.git",
         "description": "查看机器人使用状况统计",
         "category": "机器人管理类",
-        "selected": False
+        "selected": True
     },
     # ── 聊天优化类 ──
     {
@@ -137,15 +139,15 @@ ASTRBOT_PLUGINS = [
     {
         "name": "群聊主动回复Plus",
         "repo": "https://github.com/Him666233/astrbot_plugin_group_chat_plus.git",
-        "description": "功能强大的主动回复，token消耗高，设置复杂但非常强大",
+        "description": "功能强大的主动回复，token消耗高，设置复杂但非常强大，推荐等上手之后安装",
         "category": "聊天优化类",
         "selected": False,
         "conflict_note": "⚠️ 可能与「Conversa 主动回复」冲突，建议二选一"
     },
     {
-        "name": "随机回复",
+        "name": "机器人防尬聊弱黑名单",
         "repo": "https://github.com/Luna-channel/astrbot_plugin_Random_Reply.git",
-        "description": "群聊防止机器人无限聊天",
+        "description": "群聊里防止多个机器人无限聊天",
         "category": "聊天优化类",
         "selected": True
     },
@@ -154,7 +156,7 @@ ASTRBOT_PLUGINS = [
         "repo": "https://github.com/Luna-channel/astrbot_plugin_soulmap.git",
         "description": "用户画像记忆辅助系统",
         "category": "聊天优化类",
-        "selected": False
+        "selected": True
     },
     {
         "name": "好感度Pro（鸭版）",
@@ -419,7 +421,7 @@ def service_action(name, action):
                 # 进程不存在，重新创建
                 run_command("pm2 delete sillytavern 2>/dev/null || true", quiet=True)
                 ok, out = run_command(
-                    'pm2 start server.js --name "sillytavern"',
+                    'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
                     cwd="/opt/sillytavern", quiet=True
                 )
             run_command("pm2 save", quiet=True)
@@ -813,6 +815,10 @@ def generate_astrbot_yml():
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     logging:
       driver: json-file
       options:
@@ -935,7 +941,7 @@ def deploy_sillytavern():
     log("使用PM2启动SillyTavern...")
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
-        'pm2 start server.js --name "sillytavern"',
+        'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
         cwd=tavern_dir
     )
     if success:
@@ -960,17 +966,17 @@ def deploy_sillytavern():
 def set_sillytavern_password(tavern_dir):
     """为 SillyTavern 设置用户指定的用户名和密码"""
     storage_dir = os.path.join(tavern_dir, "data", "_storage")
-    
+
     # 确保存储目录存在
     os.makedirs(storage_dir, exist_ok=True)
-    
+
     # 获取用户设置的用户名和密码
     username = config.get("tavern_username", "admin")
     password = config.get("tavern_password", "")
     if not password:
         password = secrets.token_urlsafe(12)
         log(f"未设置密码，自动生成: {password}")
-    
+
     # 短暂等待看 SillyTavern 是否自动创建了 default-user（最多10秒）
     target_file = None
     for i in range(10):
@@ -988,7 +994,7 @@ def set_sillytavern_password(tavern_dir):
             log(f"找到已有用户文件: {os.path.basename(target_file)}")
             break
         time.sleep(1)
-    
+
     # 生成 salt 和 hash（与 SillyTavern 的 crypto.scrypt 兼容，使用 hex 编码）
     salt = os.urandom(16).hex()
     password_hash = hashlib.scrypt(
@@ -997,7 +1003,7 @@ def set_sillytavern_password(tavern_dir):
         n=16384, r=8, p=1, dklen=64
     )
     password_hash_hex = password_hash.hex()
-    
+
     try:
         if target_file:
             # 修改已有文件
@@ -1026,16 +1032,16 @@ def set_sillytavern_password(tavern_dir):
                     "block": []
                 }
             }
-        
+
         with open(target_file, "w", encoding="utf-8") as fp:
             json.dump(data, fp, ensure_ascii=False, indent=2)
-        
+
         # 保存到配置
         config["tavern_username"] = username
         config["tavern_password"] = password
         save_config()
         log(f"SillyTavern 账号已设置 - 用户名: {username}")
-        
+
         # 重启酒馆使改动生效
         log("重启 SillyTavern 以应用账号设置...")
         run_command("pm2 restart sillytavern", quiet=True)
@@ -1596,7 +1602,7 @@ def api_service_reinstall(name):
     valid_names = {"napcat", "astrbot", "sillytavern"}
     if name not in valid_names:
         return jsonify({"error": f"未知服务: {name}"}), 400
-    
+
     install_generation += 1
     _log_bytes = 0
     install_status = {
@@ -1609,7 +1615,7 @@ def api_service_reinstall(name):
     }
     # 在主线程中捕获请求数据（线程内无法访问 Flask request 上下文）
     reinstall_data = request.json or {}
-    
+
     def do_reinstall():
         global install_status
         try:
@@ -1668,7 +1674,7 @@ def api_service_reinstall(name):
             install_status["stage"] = "error"
             install_status["message"] = str(e)
             log(f"重装失败: {str(e)}")
-    
+
     thread = threading.Thread(target=do_reinstall, daemon=True)
     thread.start()
     return jsonify({"success": True})
@@ -2058,7 +2064,7 @@ def _continue_sillytavern_config(tavern_dir):
     log("使用PM2启动SillyTavern...")
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
-        'pm2 start server.js --name "sillytavern"',
+        'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
         cwd=tavern_dir
     )
     if success:
@@ -2205,6 +2211,335 @@ def start_install():
     thread = threading.Thread(target=do_install, args=(current_gen,), daemon=True)
     thread.start()
     return jsonify({"success": True})
+
+
+# ========== 路由：搬家功能（备份/恢复） ==========
+
+MIGRATION_TMP_DIR = os.path.join(CONFIG_DIR, "migration_tmp")
+
+# 夜鹭机默认安装路径
+DEFAULT_PATHS = {
+    "tavern_path": "/opt/sillytavern",
+    "astrbot_path": "/opt/astrbot/data",
+    "napcat_path": "/opt/astrbot/napcat/config",
+}
+
+# 路径探测：常见安装位置 + Docker inspect + find
+TAVERN_SEARCH_DIRS = [
+    "/opt/sillytavern", "/root/SillyTavern", "/home/*/SillyTavern",
+    "/srv/sillytavern", "/opt/SillyTavern",
+]
+ASTRBOT_SEARCH_DIRS = [
+    "/opt/astrbot/data", "/root/astrbot/data", "/home/*/astrbot/data",
+    "/srv/astrbot/data",
+]
+NAPCAT_SEARCH_DIRS = [
+    "/opt/astrbot/napcat/config", "/opt/napcat/config",
+    "/root/napcat/config", "/home/*/napcat/config",
+]
+
+
+def _detect_service_paths():
+    """自动探测各服务安装路径"""
+    result = {}
+
+    # --- SillyTavern: 找 package.json 含 sillytavern ---
+    for pattern in TAVERN_SEARCH_DIRS:
+        for p in glob.glob(pattern):
+            pkg = os.path.join(p, "package.json")
+            if os.path.isfile(pkg):
+                try:
+                    with open(pkg, "r") as f:
+                        d = json.load(f)
+                    if "sillytavern" in d.get("name", "").lower():
+                        result["tavern_path"] = p
+                        break
+                except Exception:
+                    pass
+            elif os.path.isdir(os.path.join(p, "data")):
+                result["tavern_path"] = p
+                break
+    # Docker fallback: 检查 pm2 进程
+    if "tavern_path" not in result:
+        try:
+            out = subprocess.check_output(
+                ["pm2", "jlist"], timeout=5, stderr=subprocess.DEVNULL
+            ).decode()
+            for proc in json.loads(out):
+                cwd = proc.get("pm2_env", {}).get("pm_cwd", "")
+                if "sillytavern" in cwd.lower() and os.path.isdir(cwd):
+                    result["tavern_path"] = cwd
+                    break
+        except Exception:
+            pass
+
+    # --- AstrBot: 找 data 目录 ---
+    for pattern in ASTRBOT_SEARCH_DIRS:
+        for p in glob.glob(pattern):
+            if os.path.isdir(p):
+                result["astrbot_path"] = p
+                break
+        if "astrbot_path" in result:
+            break
+    # Docker fallback
+    if "astrbot_path" not in result:
+        try:
+            out = subprocess.check_output(
+                ["docker", "inspect", "astrbot", "--format",
+                 "{{range .Mounts}}{{.Source}}:{{.Destination}}\n{{end}}"],
+                timeout=5, stderr=subprocess.DEVNULL
+            ).decode()
+            for line in out.strip().split("\n"):
+                if ":" in line:
+                    src, dst = line.rsplit(":", 1)
+                    if "/data" in dst and os.path.isdir(src):
+                        result["astrbot_path"] = src
+                        break
+        except Exception:
+            pass
+
+    # --- NapCat: 找 config 目录 ---
+    for pattern in NAPCAT_SEARCH_DIRS:
+        for p in glob.glob(pattern):
+            if os.path.isdir(p):
+                result["napcat_path"] = p
+                break
+        if "napcat_path" in result:
+            break
+    # Docker fallback
+    if "napcat_path" not in result:
+        try:
+            out = subprocess.check_output(
+                ["docker", "inspect", "napcat", "--format",
+                 "{{range .Mounts}}{{.Source}}:{{.Destination}}\n{{end}}"],
+                timeout=5, stderr=subprocess.DEVNULL
+            ).decode()
+            for line in out.strip().split("\n"):
+                if ":" in line:
+                    src, dst = line.rsplit(":", 1)
+                    if "config" in dst.lower() and os.path.isdir(src):
+                        result["napcat_path"] = src
+                        break
+        except Exception:
+            pass
+
+    return result
+
+
+def _get_paths(data):
+    """从请求数据中获取路径，如果是自定义模式则用自定义路径，否则用默认"""
+    paths = {}
+    paths["tavern_path"] = (
+        data.get("tavern_path", "").strip()
+        or DEFAULT_PATHS["tavern_path"]
+    )
+    paths["astrbot_path"] = (
+        data.get("astrbot_path", "").strip()
+        or DEFAULT_PATHS["astrbot_path"]
+    )
+    paths["napcat_path"] = (
+        data.get("napcat_path", "").strip()
+        or DEFAULT_PATHS["napcat_path"]
+    )
+    return paths
+
+
+def _collect_migration_data(tmp_dir, paths):
+    """收集需要备份的数据到临时目录，返回详情列表"""
+    details = []
+
+    # --- AstrBot: 完整 data 目录 ---
+    astrbot_data = paths["astrbot_path"]
+    if os.path.isdir(astrbot_data):
+        dst = os.path.join(tmp_dir, "astrbot", "data")
+        shutil.copytree(astrbot_data, dst, dirs_exist_ok=True)
+        details.append("AstrBot data")
+
+    # --- SillyTavern: 完整 data 目录 + config.yaml ---
+    tavern_base = paths["tavern_path"]
+    tavern_data = os.path.join(tavern_base, "data")
+    if os.path.isdir(tavern_data):
+        dst = os.path.join(tmp_dir, "sillytavern", "data")
+        shutil.copytree(tavern_data, dst, dirs_exist_ok=True)
+        details.append("SillyTavern data")
+    # config.yaml
+    tavern_cfg = os.path.join(tavern_base, "config.yaml")
+    if os.path.isfile(tavern_cfg):
+        dst_cfg = os.path.join(tmp_dir, "sillytavern", "config.yaml")
+        os.makedirs(os.path.dirname(dst_cfg), exist_ok=True)
+        shutil.copy2(tavern_cfg, dst_cfg)
+        if "SillyTavern data" not in details:
+            details.append("SillyTavern config")
+
+    # --- NapCat: 完整配置（含 webui token） ---
+    napcat_config = paths["napcat_path"]
+    if os.path.isdir(napcat_config):
+        dst = os.path.join(tmp_dir, "napcat", "config")
+        shutil.copytree(napcat_config, dst, dirs_exist_ok=True)
+        details.append("NapCat config")
+
+    return details
+
+
+@app.route("/api/migration/detect-paths")
+@login_required
+def api_migration_detect_paths():
+    """自动探测各服务安装路径"""
+    try:
+        result = _detect_service_paths()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/migration/export", methods=["POST"])
+@login_required
+def api_migration_export():
+    """打包备份数据"""
+    try:
+        data = request.get_json(silent=True) or {}
+        paths = _get_paths(data)
+
+        if os.path.exists(MIGRATION_TMP_DIR):
+            shutil.rmtree(MIGRATION_TMP_DIR, ignore_errors=True)
+        os.makedirs(MIGRATION_TMP_DIR, exist_ok=True)
+
+        collect_dir = os.path.join(MIGRATION_TMP_DIR, "yolushiki_backup")
+        os.makedirs(collect_dir, exist_ok=True)
+
+        details = _collect_migration_data(collect_dir, paths)
+
+        if not details:
+            return jsonify({"success": False, "error": "未找到任何可备份的数据"}), 400
+
+        meta = {
+            "version": VERSION,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "contents": details,
+            "paths": paths
+        }
+        with open(os.path.join(collect_dir, "backup_meta.json"), "w") as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        filename = f"yolushiki_backup_{ts}.tar.gz"
+        archive_path = os.path.join(MIGRATION_TMP_DIR, filename)
+        with tarfile.open(archive_path, "w:gz") as tar:
+            tar.add(collect_dir, arcname="yolushiki_backup")
+
+        shutil.rmtree(collect_dir, ignore_errors=True)
+
+        return jsonify({"success": True, "filename": filename, "details": details})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/migration/download")
+@login_required
+def api_migration_download():
+    """下载打包好的备份文件"""
+    filename = request.args.get("file", "")
+    if not filename or ".." in filename or "/" in filename or "\\" in filename:
+        return jsonify({"error": "无效文件名"}), 400
+    filepath = os.path.join(MIGRATION_TMP_DIR, filename)
+    if not os.path.exists(filepath):
+        return jsonify({"error": "文件不存在"}), 404
+    return send_file(filepath, as_attachment=True, download_name=filename)
+
+
+@app.route("/api/migration/import", methods=["POST"])
+@login_required
+def api_migration_import():
+    """接收上传的备份文件并恢复"""
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "error": "未选择文件"}), 400
+        f = request.files["file"]
+        if not f.filename:
+            return jsonify({"success": False, "error": "未选择文件"}), 400
+
+        # 解析自定义路径
+        paths_json = request.form.get("paths", "")
+        custom_paths = {}
+        if paths_json:
+            try:
+                custom_paths = json.loads(paths_json)
+            except Exception:
+                pass
+        paths = _get_paths(custom_paths)
+
+        if os.path.exists(MIGRATION_TMP_DIR):
+            shutil.rmtree(MIGRATION_TMP_DIR, ignore_errors=True)
+        os.makedirs(MIGRATION_TMP_DIR, exist_ok=True)
+
+        upload_path = os.path.join(MIGRATION_TMP_DIR, "upload.tar.gz")
+        f.save(upload_path)
+
+        extract_dir = os.path.join(MIGRATION_TMP_DIR, "extract")
+        os.makedirs(extract_dir, exist_ok=True)
+        with tarfile.open(upload_path, "r:gz") as tar:
+            for member in tar.getmembers():
+                member_path = os.path.normpath(member.name)
+                if member_path.startswith("..") or os.path.isabs(member_path):
+                    return jsonify({
+                        "success": False,
+                        "error": "备份文件包含非法路径，已拒绝"
+                    }), 400
+            tar.extractall(extract_dir)
+
+        backup_root = os.path.join(extract_dir, "yolushiki_backup")
+        if not os.path.isdir(backup_root):
+            items = os.listdir(extract_dir)
+            if len(items) == 1 and os.path.isdir(os.path.join(extract_dir, items[0])):
+                backup_root = os.path.join(extract_dir, items[0])
+            else:
+                return jsonify({"success": False, "error": "无效的备份文件结构"}), 400
+
+        details = []
+
+        # --- 恢复 AstrBot data ---
+        astrbot_src = os.path.join(backup_root, "astrbot", "data")
+        astrbot_dst = paths["astrbot_path"]
+        if os.path.isdir(astrbot_src):
+            os.makedirs(astrbot_dst, exist_ok=True)
+            shutil.copytree(astrbot_src, astrbot_dst, dirs_exist_ok=True)
+            details.append("AstrBot data")
+
+        # --- 恢复 SillyTavern data + config ---
+        tavern_src = os.path.join(backup_root, "sillytavern")
+        tavern_dst = paths["tavern_path"]
+        if os.path.isdir(tavern_src):
+            for root, dirs, files in os.walk(tavern_src):
+                rel = os.path.relpath(root, tavern_src)
+                target_dir = os.path.join(tavern_dst, rel)
+                os.makedirs(target_dir, exist_ok=True)
+                for fname in files:
+                    src_file = os.path.join(root, fname)
+                    dst_file = os.path.join(target_dir, fname)
+                    shutil.copy2(src_file, dst_file)
+            details.append("SillyTavern data + config")
+
+        # --- 恢复 NapCat config（完整覆盖） ---
+        napcat_src = os.path.join(backup_root, "napcat", "config")
+        napcat_dst = paths["napcat_path"]
+        if os.path.isdir(napcat_src):
+            os.makedirs(napcat_dst, exist_ok=True)
+            shutil.copytree(napcat_src, napcat_dst, dirs_exist_ok=True)
+            details.append("NapCat config")
+
+        shutil.rmtree(MIGRATION_TMP_DIR, ignore_errors=True)
+
+        if not details:
+            return jsonify({
+                "success": False,
+                "error": "备份文件中未找到可恢复的数据"
+            }), 400
+
+        return jsonify({"success": True, "details": details})
+    except tarfile.TarError:
+        return jsonify({"success": False, "error": "文件不是有效的 tar.gz 格式"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ========== 启动 ==========

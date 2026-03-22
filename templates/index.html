@@ -7,7 +7,7 @@
     <link rel="icon" href="/static/logo.ico" type="image/x-icon">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
-        :root {
+        :root, [data-theme="dark"] {
             --bg-primary: #0a1628;
             --bg-secondary: #111d32;
             --bg-card: rgba(20,40,80,0.5);
@@ -19,11 +19,34 @@
             --text-primary: #e0e6f0;
             --text-secondary: #7a8ba5;
             --border: rgba(45,90,142,0.3);
+            --topbar-bg: rgba(10,22,40,0.8);
+            --card-shadow: none;
+            --input-bg: rgba(10,22,40,0.6);
+            --code-bg: #060d18;
+            --ency-bg: var(--bg-secondary);
+        }
+        [data-theme="light"] {
+            --bg-primary: #eef2f7;
+            --bg-secondary: #dde4ed;
+            --bg-card: rgba(255,255,255,0.85);
+            --accent-blue: #2d5a8e;
+            --accent-blue-light: #3a7bd5;
+            --accent-red: #c0392b;
+            --accent-yellow: #b8860b;
+            --accent-green: #27ae60;
+            --text-primary: #1a2332;
+            --text-secondary: #5a6a7e;
+            --border: rgba(45,90,142,0.2);
+            --topbar-bg: rgba(255,255,255,0.85);
+            --card-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            --input-bg: rgba(255,255,255,0.8);
+            --code-bg: #e8ecf1;
+            --ency-bg: #f5f7fa;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, #0d2137 100%);
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
             min-height: 100vh;
             color: var(--text-primary);
         }
@@ -34,7 +57,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 16px 24px;
-            background: rgba(10,22,40,0.8);
+            background: var(--topbar-bg);
             border-bottom: 1px solid var(--border);
             backdrop-filter: blur(10px);
             position: sticky;
@@ -45,7 +68,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #fff;
+            color: var(--text-primary);
             font-size: 1.2rem;
             font-weight: 600;
         }
@@ -96,7 +119,7 @@
             backdrop-filter: blur(10px);
         }
         .card h2 {
-            color: #fff;
+            color: var(--text-primary);
             margin-bottom: 20px;
             font-size: 1.15rem;
             display: flex;
@@ -131,7 +154,7 @@
         }
         .svc-name {
             font-weight: 600;
-            color: #fff;
+            color: var(--text-primary);
             margin-bottom: 8px;
             font-size: 1rem;
         }
@@ -179,7 +202,7 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        .svc-btn:hover { background: var(--bg-card); color: #fff; }
+        .svc-btn:hover { background: var(--bg-card); color: var(--text-primary); }
         .svc-btn i { width: 14px; height: 14px; }
         .svc-btn.open-btn { border-color: var(--accent-blue); color: var(--accent-blue-light); }
         .svc-btn.open-btn:hover { background: rgba(45,90,142,0.2); }
@@ -232,7 +255,7 @@
         .sys-item .sys-value {
             font-size: 1.1rem;
             font-weight: 600;
-            color: #fff;
+            color: var(--text-primary);
         }
 
         /* ===== 安装向导样式 ===== */
@@ -248,8 +271,8 @@
             padding: 12px 16px;
             border: 1px solid var(--border);
             border-radius: 8px;
-            background: rgba(0,0,0,0.3);
-            color: #fff;
+            background: var(--input-bg);
+            color: var(--text-primary);
             font-size: 1rem;
         }
         .form-group input:focus { outline: none; border-color: var(--accent-blue-light); }
@@ -287,7 +310,7 @@
         .plugin-item:hover { background: rgba(45,90,142,0.1); }
         .plugin-item input[type="checkbox"] { width: 18px; height: 18px; margin-right: 14px; accent-color: var(--accent-blue-light); }
         .plugin-item .info { flex: 1; }
-        .plugin-item .name { font-weight: 500; color: #fff; margin-bottom: 2px; }
+        .plugin-item .name { font-weight: 500; color: var(--text-primary); margin-bottom: 2px; }
         .plugin-item .desc { font-size: 0.82rem; color: var(--text-secondary); }
         .plugin-item.plugin-required { border-left: 3px solid var(--accent-green); }
         .plugin-category-header {
@@ -373,7 +396,7 @@
         .progress-text {
             text-align: center;
             font-size: 1rem;
-            color: #fff;
+            color: var(--text-primary);
             margin-bottom: 16px;
             display: flex;
             align-items: center;
@@ -393,7 +416,7 @@
             to { transform: rotate(360deg); }
         }
         .log-box {
-            background: #060d18;
+            background: var(--code-bg);
             border-radius: 8px;
             padding: 14px;
             height: 200px;
@@ -458,7 +481,7 @@
             width: 100%;
         }
         .modal h2 {
-            color: #fff;
+            color: var(--text-primary);
             margin-bottom: 16px;
             display: flex;
             align-items: center;
@@ -481,8 +504,8 @@
             padding: 10px 14px;
             border: 1px solid var(--border);
             border-radius: 8px;
-            background: rgba(0,0,0,0.3);
-            color: #fff;
+            background: var(--input-bg);
+            color: var(--text-primary);
             font-size: 0.95rem;
         }
         .modal .input-group input:focus { outline: none; border-color: var(--accent-blue-light); }
@@ -521,7 +544,7 @@
 
         /* 日志弹窗 */
         .logs-content {
-            background: #060d18;
+            background: var(--code-bg);
             border-radius: 8px;
             padding: 14px;
             max-height: 400px;
@@ -620,7 +643,7 @@
             text-align: center;
             font-size: 1.1rem;
             font-weight: 600;
-            color: #fff;
+            color: var(--text-primary);
             margin-bottom: 12px;
         }
         .dialog-message {
@@ -638,7 +661,7 @@
         .shutdown-screen {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, #0d2137 100%);
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -646,10 +669,10 @@
             z-index: 3000;
         }
         .shutdown-screen .logo { width: 80px; height: 80px; border-radius: 12px; margin-bottom: 20px; opacity: 0.6; }
-        .shutdown-screen h1 { color: #fff; font-size: 1.8rem; margin-bottom: 12px; }
+        .shutdown-screen h1 { color: var(--text-primary); font-size: 1.8rem; margin-bottom: 12px; }
         .shutdown-screen p { color: var(--text-secondary); margin-bottom: 24px; }
         .shutdown-screen .cmd-box {
-            background: #060d18;
+            background: var(--code-bg);
             padding: 14px 24px;
             border-radius: 8px;
             font-family: 'Consolas', monospace;
@@ -660,6 +683,101 @@
         }
         .shutdown-screen .cmd-box:hover { background: #0a1520; }
         .shutdown-screen .hint { font-size: 0.8rem; color: var(--text-secondary); }
+
+        /* ===== 搬家弹窗 ===== */
+        .migration-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 3500;
+            padding: 20px;
+        }
+        .migration-overlay.show { display: flex; }
+        .migration-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 520px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .migration-box .mig-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .migration-box .mig-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .mig-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 14px;
+        }
+        .mig-section-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .mig-section-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        .mig-progress {
+            display: none;
+            margin-top: 12px;
+        }
+        .mig-progress.show { display: block; }
+        .mig-progress-bar {
+            height: 6px;
+            background: rgba(45,90,142,0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .mig-progress-bar-fill {
+            height: 100%;
+            background: var(--accent-blue-light);
+            border-radius: 3px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+        .mig-progress-text {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .mig-close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px;
+        }
+        .mig-close-btn:hover { color: var(--text-primary); }
+        .migration-box { position: relative; }
 
         /* ===== 公告弹窗 ===== */
         .announcement-overlay {
@@ -779,14 +897,14 @@
             flex-shrink: 0;
         }
         .ency-header h2 {
-            margin: 0; font-size: 1.1rem; color: #fff;
+            margin: 0; font-size: 1.1rem; color: var(--text-primary);
             display: flex; align-items: center; gap: 8px;
         }
         .ency-close {
             background: none; border: none; color: var(--text-secondary);
             cursor: pointer; padding: 6px; border-radius: 6px; font-size: 1.2rem;
         }
-        .ency-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+        .ency-close:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
         .ency-back {
             background: none; border: none; color: var(--accent-blue-light);
             cursor: pointer; padding: 6px 10px; border-radius: 6px; font-size: 0.85rem;
@@ -798,9 +916,9 @@
         }
         .ency-search input {
             width: 100%; padding: 10px 14px;
-            background: rgba(255,255,255,0.06);
+            background: var(--input-bg);
             border: 1px solid var(--border);
-            border-radius: 8px; color: #fff; font-size: 0.85rem;
+            border-radius: 8px; color: var(--text-primary); font-size: 0.85rem;
             outline: none;
         }
         .ency-search input:focus { border-color: var(--accent-blue-light); }
@@ -832,7 +950,7 @@
         }
         .ency-item:hover { background: rgba(255,255,255,0.05); }
         .ency-item-title {
-            color: #fff; font-size: 0.9rem; font-weight: 500; margin-bottom: 3px;
+            color: var(--text-primary); font-size: 0.9rem; font-weight: 500; margin-bottom: 3px;
         }
         .ency-item-brief {
             color: var(--text-secondary); font-size: 0.78rem; line-height: 1.4;
@@ -848,7 +966,7 @@
         }
         .ency-detail.active { display: block; }
         .ency-detail-title {
-            color: #fff; font-size: 1.15rem; font-weight: 600; margin-bottom: 6px;
+            color: var(--text-primary); font-size: 1.15rem; font-weight: 600; margin-bottom: 6px;
         }
         .ency-detail-cat {
             display: inline-block; font-size: 0.7rem; padding: 2px 10px;
@@ -884,6 +1002,13 @@
             <button class="topbar-btn topbar-btn-announce" onclick="showAnnouncement()" title="公告" style="margin-left:4px;">
                 <i data-lucide="megaphone"></i>
             </button>
+            <button class="topbar-btn" onclick="openMigration()" title="搬家">
+                <i data-lucide="package"></i>
+            </button>
+            <button class="topbar-btn" onclick="toggleTheme()" id="theme-toggle-btn" title="切换主题">
+                <i data-lucide="sun" id="theme-icon-sun" style="display:none;"></i>
+                <i data-lucide="moon" id="theme-icon-moon"></i>
+            </button>
             <button class="topbar-btn topbar-btn-danger" onclick="confirmShutdown()">
                 <i data-lucide="power"></i>
             </button>
@@ -896,7 +1021,7 @@
         <div id="setup-section" class="section">
             <div style="text-align:center; margin-bottom:30px;">
                 <img src="/static/logo.png" alt="夜鹭机" style="width:72px;height:72px;border-radius:12px;margin-bottom:12px;">
-                <h1 style="color:#fff;font-size:2rem;margin-bottom:8px;">夜鹭机</h1>
+                <h1 style="color:var(--text-primary);font-size:2rem;margin-bottom:8px;">夜鹭机</h1>
                 <p style="color:var(--text-secondary);">一键部署 AstrBot + SillyTavern</p>
             </div>
 
@@ -936,17 +1061,17 @@
                     </p>
                     <div class="form-group" style="margin-bottom:12px;">
                         <label for="tavern-username">用户名 <span style="color:var(--accent-red);">*必填</span></label>
-                        <input type="text" id="tavern-username" value="admin" placeholder="设置酒馆登录用户名" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,0.3);color:#fff;font-size:1rem;">
+                        <input type="text" id="tavern-username" value="admin" placeholder="设置酒馆登录用户名" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);color:var(--text-primary);font-size:1rem;">
                         <div class="hint">登录酒馆时使用的用户名，建议用英文</div>
                     </div>
                     <div class="form-group" style="margin-bottom:12px;">
                         <label for="tavern-password">密码 <span style="color:var(--accent-red);">*必填</span></label>
-                        <input type="password" id="tavern-password" placeholder="设置酒馆登录密码（至少6位）" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,0.3);color:#fff;font-size:1rem;">
+                        <input type="password" id="tavern-password" placeholder="设置酒馆登录密码（至少6位）" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);color:var(--text-primary);font-size:1rem;">
                         <div class="hint">请牢记此密码，安装完成后需要用它登录酒馆</div>
                     </div>
                     <div class="form-group">
                         <label for="tavern-password-confirm">确认密码 <span style="color:var(--accent-red);">*必填</span></label>
-                        <input type="password" id="tavern-password-confirm" placeholder="再次输入密码" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,0.3);color:#fff;font-size:1rem;">
+                        <input type="password" id="tavern-password-confirm" placeholder="再次输入密码" style="width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);color:var(--text-primary);font-size:1rem;">
                     </div>
                 </div>
             </div>
@@ -1192,10 +1317,10 @@
                 <h2><i data-lucide="key"></i> 云酒馆登录信息</h2>
                 <div style="background:rgba(0,0,0,0.2);padding:14px;border-radius:10px;margin-bottom:10px;">
                     <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">用户名</div>
-                    <code id="tavern-username-value" style="background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-blue-light);font-size:0.9rem;display:block;margin-bottom:12px;">--</code>
+                    <code id="tavern-username-value" style="background:var(--code-bg);padding:8px 12px;border-radius:6px;color:var(--accent-blue-light);font-size:0.9rem;display:block;margin-bottom:12px;">--</code>
                     <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">密码</div>
                     <div style="display:flex;align-items:center;gap:10px;">
-                        <code id="tavern-password-value" style="flex:1;background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;font-family:monospace;">--</code>
+                        <code id="tavern-password-value" style="flex:1;background:var(--code-bg);padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;font-family:monospace;">--</code>
                         <button class="svc-btn" onclick="copyTavernPassword()" style="white-space:nowrap;">
                             <i data-lucide="copy"></i> 复制
                         </button>
@@ -1217,7 +1342,7 @@
                 <div style="background:rgba(0,0,0,0.2);padding:14px;border-radius:10px;margin-bottom:10px;">
                     <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;">WebUI Token（复制后进入NC进行登录）</div>
                     <div style="display:flex;align-items:center;gap:10px;">
-                        <code id="napcat-token-value" style="flex:1;background:#060d18;padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;word-break:break-all;">点击获取按钮查看</code>
+                        <code id="napcat-token-value" style="flex:1;background:var(--code-bg);padding:8px 12px;border-radius:6px;color:var(--accent-yellow);font-size:0.9rem;word-break:break-all;">点击获取按钮查看</code>
                         <button class="svc-btn" id="napcat-token-fetch-btn" onclick="fetchAndShowNapCatToken()" style="white-space:nowrap;">
                             <i data-lucide="eye"></i> 获取
                         </button>
@@ -1227,7 +1352,7 @@
                     </div>
                 </div>
                 <div style="font-size:0.75rem;color:var(--text-secondary);">
-                    Token 来源: <code style="background:#060d18;padding:1px 6px;border-radius:3px;color:var(--accent-green);font-size:0.72rem;">/opt/astrbot/napcat/config/webui.json</code>
+                    Token 来源: <code style="background:var(--code-bg);padding:1px 6px;border-radius:3px;color:var(--accent-green);font-size:0.72rem;">/opt/astrbot/napcat/config/webui.json</code>
                 </div>
             </div>
 
@@ -1377,15 +1502,15 @@
                 <div style="margin-bottom:14px;color:var(--text-secondary);">接下来请按顺序完成以下配置：</div>
                 <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;">
                     <span style="background:var(--accent-blue);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.8rem;font-weight:bold;">1</span>
-                    <div><strong style="color:#fff;">去 NapCat 扫码登录 QQ</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">点击仪表盘中 NapCat 的"打开"按钮，用手机 QQ 扫码</span></div>
+                    <div><strong style="color:var(--text-primary);">去 NapCat 扫码登录 QQ</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">点击仪表盘中 NapCat 的"打开"按钮，用手机 QQ 扫码</span></div>
                 </div>
                 <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;">
                     <span style="background:var(--accent-blue);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.8rem;font-weight:bold;">2</span>
-                    <div><strong style="color:#fff;">配置 AstrBot 的 AI 模型</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">打开 AstrBot 管理面板，设置你的 AI 接口密钥</span></div>
+                    <div><strong style="color:var(--text-primary);">配置 AstrBot 的 AI 模型</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">打开 AstrBot 管理面板，设置你的 AI 接口密钥</span></div>
                 </div>
                 <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;">
                     <span style="background:var(--accent-blue);color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.8rem;font-weight:bold;">3</span>
-                    <div><strong style="color:#fff;">打开云酒馆开始使用</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">用安装时设置的账号密码登录 SillyTavern</span></div>
+                    <div><strong style="color:var(--text-primary);">打开云酒馆开始使用</strong><br><span style="color:var(--text-secondary);font-size:0.8rem;">用安装时设置的账号密码登录 SillyTavern</span></div>
                 </div>
                 <div style="margin-top:10px;padding:10px 14px;background:rgba(212,160,23,0.1);border-radius:8px;font-size:0.78rem;color:var(--accent-yellow);">
                     💡 每个服务都有详细教程，点击仪表盘下方的"配置教程"链接即可查看
@@ -1429,13 +1554,13 @@
             <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">选择要清理的内容。勾选的项目将被删除，请谨慎操作。</p>
             <div style="display:flex;flex-direction:column;gap:10px;">
                 <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;cursor:pointer;">
-                    <input type="checkbox" id="uninst-containers" checked> <span style="color:#fff;font-size:0.9rem;">停止并删除 Docker 容器（AstrBot + NapCat）</span>
+                    <input type="checkbox" id="uninst-containers" checked> <span style="color:var(--text-primary);font-size:0.9rem;">停止并删除 Docker 容器（AstrBot + NapCat）</span>
                 </label>
                 <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;cursor:pointer;">
-                    <input type="checkbox" id="uninst-images"> <span style="color:#fff;font-size:0.9rem;">删除 Docker 镜像（释放磁盘空间）</span>
+                    <input type="checkbox" id="uninst-images"> <span style="color:var(--text-primary);font-size:0.9rem;">删除 Docker 镜像（释放磁盘空间）</span>
                 </label>
                 <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;cursor:pointer;">
-                    <input type="checkbox" id="uninst-tavern" checked> <span style="color:#fff;font-size:0.9rem;">停止 SillyTavern</span>
+                    <input type="checkbox" id="uninst-tavern" checked> <span style="color:var(--text-primary);font-size:0.9rem;">停止 SillyTavern</span>
                 </label>
                 <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:8px;cursor:pointer;">
                     <input type="checkbox" id="uninst-data"> <span style="color:var(--accent-red);font-size:0.9rem;">⚠ 删除所有数据（聊天记录、配置、角色卡等不可恢复！）</span>
@@ -1460,24 +1585,88 @@
             <div style="display:flex;flex-direction:column;gap:12px;">
                 <div style="margin:0;">
                     <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">酒馆端口</label>
-                    <input type="number" id="reinstall-tavern-port" value="18880" min="1024" max="65535" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;box-sizing:border-box;">
+                    <input type="number" id="reinstall-tavern-port" value="18880" min="1024" max="65535" style="width:100%;padding:10px 14px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:0.9rem;box-sizing:border-box;">
                 </div>
                 <div style="margin:0;">
                     <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">登录用户名</label>
-                    <input type="text" id="reinstall-tavern-username" placeholder="例如 admin" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;box-sizing:border-box;">
+                    <input type="text" id="reinstall-tavern-username" placeholder="例如 admin" style="width:100%;padding:10px 14px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:0.9rem;box-sizing:border-box;">
                 </div>
                 <div style="margin:0;">
                     <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">登录密码（至少6位）</label>
-                    <input type="password" id="reinstall-tavern-password" placeholder="设置密码" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;box-sizing:border-box;">
+                    <input type="password" id="reinstall-tavern-password" placeholder="设置密码" style="width:100%;padding:10px 14px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:0.9rem;box-sizing:border-box;">
                 </div>
                 <div style="margin:0;">
                     <label style="color:var(--text-secondary);font-size:0.82rem;margin-bottom:4px;display:block;">确认密码</label>
-                    <input type="password" id="reinstall-tavern-password-confirm" placeholder="再次输入密码" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:0.9rem;box-sizing:border-box;">
+                    <input type="password" id="reinstall-tavern-password-confirm" placeholder="再次输入密码" style="width:100%;padding:10px 14px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:0.9rem;box-sizing:border-box;">
                 </div>
             </div>
             <div class="modal-btns" style="margin-top:16px;">
                 <button class="btn btn-secondary" onclick="document.getElementById('reinstall-tavern-modal').classList.add('hidden')">取消</button>
                 <button class="btn" style="background:var(--accent-yellow);color:#000;font-weight:600;" onclick="doReinstallTavern()">确认重装</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 搬家弹窗 ===== -->
+    <div class="migration-overlay" id="migration-overlay">
+        <div class="migration-box">
+            <button class="mig-close-btn" onclick="closeMigration()"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+            <div class="mig-title"><i data-lucide="package" style="width:22px;height:22px;color:var(--accent-blue-light);"></i> 搬家工具</div>
+            <div class="mig-desc">完整备份或恢复 AstrBot、SillyTavern、NapCat 的数据与配置。</div>
+
+            <div class="mig-section" style="padding:14px;">
+                <div class="mig-section-title" style="margin-bottom:8px;"><i data-lucide="settings" style="width:16px;height:16px;color:var(--text-secondary);"></i> 安装来源</div>
+                <div style="display:flex;gap:8px;">
+                    <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--input-bg);border:1px solid var(--accent-blue);border-radius:8px;cursor:pointer;font-size:0.82rem;color:var(--text-primary);">
+                        <input type="radio" name="mig-source" value="yolushiki" checked onchange="toggleMigCustomPaths()"> 夜鹭机安装
+                    </label>
+                    <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.82rem;color:var(--text-primary);">
+                        <input type="radio" name="mig-source" value="custom" onchange="toggleMigCustomPaths()"> 自定义路径
+                    </label>
+                </div>
+                <div id="mig-custom-paths" style="display:none;margin-top:10px;">
+                    <div style="font-size:0.78rem;color:var(--accent-yellow);margin-bottom:8px;">留空的路径将自动跳过，不备份对应服务。</div>
+                    <div style="margin-bottom:6px;">
+                        <label style="font-size:0.78rem;color:var(--text-secondary);display:block;margin-bottom:3px;">SillyTavern 目录</label>
+                        <input type="text" id="mig-path-tavern" placeholder="/opt/sillytavern" style="width:100%;padding:8px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.82rem;">
+                    </div>
+                    <div style="margin-bottom:6px;">
+                        <label style="font-size:0.78rem;color:var(--text-secondary);display:block;margin-bottom:3px;">AstrBot 数据目录</label>
+                        <input type="text" id="mig-path-astrbot" placeholder="/opt/astrbot/data" style="width:100%;padding:8px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.82rem;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.78rem;color:var(--text-secondary);display:block;margin-bottom:3px;">NapCat 配置目录</label>
+                        <input type="text" id="mig-path-napcat" placeholder="/opt/astrbot/napcat/config" style="width:100%;padding:8px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.82rem;">
+                    </div>
+                    <button class="btn" onclick="migDetectPaths()" style="margin-top:8px;padding:8px;font-size:0.8rem;border:1px solid var(--accent-blue);color:var(--accent-blue-light);background:transparent;width:100%;border-radius:6px;" id="mig-detect-btn">
+                        <i data-lucide="search" style="width:13px;height:13px;"></i> 自动探测路径
+                    </button>
+                </div>
+            </div>
+
+            <div class="mig-section">
+                <div class="mig-section-title"><i data-lucide="download" style="width:16px;height:16px;color:var(--accent-green);"></i> 导出备份</div>
+                <div class="mig-section-desc">将当前设备的数据打包为 .tar.gz 文件下载到本地。</div>
+                <button class="btn btn-primary" id="mig-export-btn" onclick="migrationExport()" style="width:100%;padding:10px;">
+                    <i data-lucide="archive" style="width:14px;height:14px;"></i> 开始打包并下载
+                </button>
+                <div class="mig-progress" id="mig-export-progress">
+                    <div class="mig-progress-bar"><div class="mig-progress-bar-fill" id="mig-export-bar"></div></div>
+                    <div class="mig-progress-text" id="mig-export-text">准备中...</div>
+                </div>
+            </div>
+
+            <div class="mig-section">
+                <div class="mig-section-title"><i data-lucide="upload" style="width:16px;height:16px;color:var(--accent-yellow);"></i> 导入恢复</div>
+                <div class="mig-section-desc">上传之前导出的 .tar.gz 备份文件，自动解包并恢复数据到对应位置。</div>
+                <label class="btn" style="width:100%;padding:10px;text-align:center;cursor:pointer;border:1px dashed var(--border);background:var(--input-bg);color:var(--text-secondary);display:flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;" id="mig-import-label">
+                    <i data-lucide="folder-open" style="width:14px;height:14px;"></i> 选择备份文件 (.tar.gz)
+                    <input type="file" accept=".tar.gz,.tgz" id="mig-import-file" style="display:none;" onchange="migrationImport(this)">
+                </label>
+                <div class="mig-progress" id="mig-import-progress">
+                    <div class="mig-progress-bar"><div class="mig-progress-bar-fill" id="mig-import-bar"></div></div>
+                    <div class="mig-progress-text" id="mig-import-text">准备中...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -1516,6 +1705,33 @@
         // ===== 全局变量 =====
         const CONFIG = {{ config | tojson }};
         let statusInterval = null;
+
+        // ===== 主题切换 =====
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('yolushiki-theme', theme);
+            const sunIcon = document.getElementById('theme-icon-sun');
+            const moonIcon = document.getElementById('theme-icon-moon');
+            if (sunIcon && moonIcon) {
+                if (theme === 'light') {
+                    sunIcon.style.display = 'none';
+                    moonIcon.style.display = '';
+                } else {
+                    sunIcon.style.display = '';
+                    moonIcon.style.display = 'none';
+                }
+            }
+        }
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'dark';
+            applyTheme(current === 'dark' ? 'light' : 'dark');
+            lucide.createIcons();
+        }
+        // 页面加载前立即应用已保存的主题（防止闪烁）
+        (function() {
+            const saved = localStorage.getItem('yolushiki-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', saved);
+        })();
         let installInterval = null;
         let dialogResolve = null;
 
@@ -1710,6 +1926,8 @@
         // ===== 初始化 =====
         document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
+            // 恢复主题图标状态
+            applyTheme(localStorage.getItem('yolushiki-theme') || 'dark');
             
             // 安装选项联动
             const installAstrbot = document.getElementById('install-astrbot');
@@ -2719,6 +2937,190 @@
 
         function hideReportModal() {
             document.getElementById('report-modal').classList.add('hidden');
+        }
+
+        // ===== 搬家功能 =====
+        function openMigration() {
+            document.getElementById('migration-overlay').classList.add('show');
+            document.getElementById('mig-export-progress').classList.remove('show');
+            document.getElementById('mig-import-progress').classList.remove('show');
+            document.getElementById('mig-export-btn').disabled = false;
+            document.getElementById('mig-import-file').value = '';
+            lucide.createIcons();
+        }
+        function closeMigration() {
+            document.getElementById('migration-overlay').classList.remove('show');
+        }
+        function toggleMigCustomPaths() {
+            const isCustom = document.querySelector('input[name="mig-source"][value="custom"]').checked;
+            document.getElementById('mig-custom-paths').style.display = isCustom ? 'block' : 'none';
+            // 切换选中态边框
+            const labels = document.querySelectorAll('input[name="mig-source"]');
+            labels.forEach(r => {
+                r.closest('label').style.borderColor = r.checked ? 'var(--accent-blue)' : 'var(--border)';
+            });
+        }
+        function getMigPaths() {
+            const isCustom = document.querySelector('input[name="mig-source"][value="custom"]').checked;
+            if (!isCustom) return {};
+            const paths = {};
+            const t = document.getElementById('mig-path-tavern').value.trim();
+            const a = document.getElementById('mig-path-astrbot').value.trim();
+            const n = document.getElementById('mig-path-napcat').value.trim();
+            if (t) paths.tavern_path = t;
+            if (a) paths.astrbot_path = a;
+            if (n) paths.napcat_path = n;
+            return paths;
+        }
+        async function migDetectPaths() {
+            const btn = document.getElementById('mig-detect-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" style="width:13px;height:13px;"></i> 探测中...';
+            lucide.createIcons();
+            try {
+                const res = await fetch('/api/migration/detect-paths');
+                const data = await res.json();
+                if (data.tavern_path) document.getElementById('mig-path-tavern').value = data.tavern_path;
+                if (data.astrbot_path) document.getElementById('mig-path-astrbot').value = data.astrbot_path;
+                if (data.napcat_path) document.getElementById('mig-path-napcat').value = data.napcat_path;
+                let found = [];
+                if (data.tavern_path) found.push('SillyTavern');
+                if (data.astrbot_path) found.push('AstrBot');
+                if (data.napcat_path) found.push('NapCat');
+                btn.innerHTML = found.length > 0
+                    ? '<i data-lucide="check" style="width:13px;height:13px;"></i> 已探测到: ' + found.join(', ')
+                    : '<i data-lucide="alert-circle" style="width:13px;height:13px;"></i> 未探测到任何服务';
+                lucide.createIcons();
+            } catch(e) {
+                btn.innerHTML = '<i data-lucide="x" style="width:13px;height:13px;"></i> 探测失败';
+                lucide.createIcons();
+            }
+            btn.disabled = false;
+            setTimeout(() => {
+                btn.innerHTML = '<i data-lucide="search" style="width:13px;height:13px;"></i> 自动探测路径';
+                lucide.createIcons();
+            }, 4000);
+        }
+
+        async function migrationExport() {
+            const btn = document.getElementById('mig-export-btn');
+            const progress = document.getElementById('mig-export-progress');
+            const bar = document.getElementById('mig-export-bar');
+            const text = document.getElementById('mig-export-text');
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" style="width:14px;height:14px;"></i> 打包中...';
+            lucide.createIcons();
+            progress.classList.add('show');
+            bar.style.width = '10%';
+            text.textContent = '正在收集数据并打包...';
+
+            try {
+                const body = getMigPaths();
+                const packRes = await fetch('/api/migration/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const packData = await packRes.json();
+                if (!packData.success) {
+                    throw new Error(packData.error || '打包失败');
+                }
+                bar.style.width = '60%';
+                text.textContent = '打包完成，正在下载...';
+
+                const dlUrl = '/api/migration/download?file=' + encodeURIComponent(packData.filename);
+                const a = document.createElement('a');
+                a.href = dlUrl;
+                a.download = packData.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                bar.style.width = '100%';
+                text.textContent = '下载已开始 (' + packData.filename + ')';
+                btn.innerHTML = '<i data-lucide="check" style="width:14px;height:14px;"></i> 完成';
+                lucide.createIcons();
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="archive" style="width:14px;height:14px;"></i> 开始打包并下载';
+                    lucide.createIcons();
+                }, 3000);
+            } catch(e) {
+                bar.style.width = '0%';
+                text.textContent = '失败: ' + e.message;
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="archive" style="width:14px;height:14px;"></i> 重试';
+                lucide.createIcons();
+            }
+        }
+
+        async function migrationImport(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const confirmed = await showConfirm(
+                '确定要导入备份吗？\n\n这将覆盖当前设备上对应的数据。建议先导出当前数据作为备份。',
+                '导入确认'
+            );
+            if (!confirmed) { input.value = ''; return; }
+
+            const label = document.getElementById('mig-import-label');
+            const progress = document.getElementById('mig-import-progress');
+            const bar = document.getElementById('mig-import-bar');
+            const text = document.getElementById('mig-import-text');
+            label.style.pointerEvents = 'none';
+            label.style.opacity = '0.5';
+            progress.classList.add('show');
+            bar.style.width = '10%';
+            text.textContent = '正在上传 ' + file.name + '...';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const customPaths = getMigPaths();
+                if (Object.keys(customPaths).length > 0) {
+                    formData.append('paths', JSON.stringify(customPaths));
+                }
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/migration/import', true);
+
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const pct = Math.round((e.loaded / e.total) * 50);
+                        bar.style.width = pct + '%';
+                        text.textContent = '上传中... ' + pct * 2 + '%';
+                    }
+                };
+
+                const result = await new Promise((resolve, reject) => {
+                    xhr.onload = function() {
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            resolve(data);
+                        } catch(e) { reject(new Error('响应解析失败')); }
+                    };
+                    xhr.onerror = () => reject(new Error('网络错误'));
+                    xhr.send(formData);
+                });
+
+                if (result.success) {
+                    bar.style.width = '100%';
+                    let msg = '恢复完成';
+                    if (result.details && result.details.length > 0) {
+                        msg += ': ' + result.details.join('; ');
+                    }
+                    text.textContent = msg;
+                    await showAlert('数据恢复完成，建议重启相关服务使数据生效。', 'info', '恢复完成');
+                } else {
+                    throw new Error(result.error || '恢复失败');
+                }
+            } catch(e) {
+                bar.style.width = '0%';
+                text.textContent = '失败: ' + e.message;
+            }
+            label.style.pointerEvents = '';
+            label.style.opacity = '';
+            input.value = '';
         }
     </script>
 </body>
