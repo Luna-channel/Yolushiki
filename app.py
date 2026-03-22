@@ -4,7 +4,7 @@
 夜鹭机 管理面板 (Phase 2)
 """
 
-VERSION = "0.3.0"
+VERSION = "1.0.2"
 
 import glob
 import json
@@ -453,6 +453,30 @@ def get_service_logs(name, lines=50):
     return output if ok else "无法获取日志"
 
 
+def fetch_public_ip():
+    """从多个源获取公网IP，成功后自动保存到配置（更可靠）"""
+    # 多个公网IP查询源，按优先级排列
+    ip_sources = [
+        "curl -s --connect-timeout 5 --max-time 8 ifconfig.me",
+        "curl -s --connect-timeout 5 --max-time 8 ip.sb",
+        "curl -s --connect-timeout 5 --max-time 8 ipinfo.io/ip",
+        "curl -s --connect-timeout 5 --max-time 8 icanhazip.com",
+        "curl -s --connect-timeout 5 --max-time 8 api.ipify.org",
+        "curl -s --connect-timeout 5 --max-time 8 checkip.amazonaws.com",
+    ]
+    for cmd in ip_sources:
+        ok, out = run_command(cmd, quiet=True)
+        if ok and out:
+            ip = out.strip()
+            # 验证是否为有效的IP格式（简单校验：包含点且不含非法字符）
+            if ip and "." in ip and len(ip) <= 15 and all(c.isdigit() or c == '.' for c in ip):
+                # 成功获取，保存到配置避免重复请求
+                config["server_ip"] = ip
+                save_config()
+                return ip
+    return ""
+
+
 def get_system_info():
     """获取系统信息（带缓存，减少外部请求和 subprocess 调用）"""
     now = time.time()
@@ -464,8 +488,9 @@ def get_system_info():
     if saved_ip and saved_ip != "你的服务器IP":
         info["ip"] = saved_ip
     else:
-        ok, out = run_command("curl -s --connect-timeout 3 ifconfig.me || curl -s --connect-timeout 3 ip.sb", quiet=True)
-        info["ip"] = out.strip() if ok else "未知"
+        # 使用多源获取公网IP
+        public_ip = fetch_public_ip()
+        info["ip"] = public_ip if public_ip else "未知"
     # 内存
     ok, out = run_command("free -b | grep Mem", quiet=True)
     if ok:
@@ -1249,18 +1274,20 @@ def do_install(generation):
         install_status["progress"] = 95
         install_status["message"] = "保存配置..."
 
-        # 获取服务器公网 IP
-        server_ip = ""
-        ok, ip_out = run_command("curl -s --connect-timeout 3 ifconfig.me || curl -s --connect-timeout 3 ip.sb", quiet=True)
-        if ok and ip_out.strip():
-            server_ip = ip_out.strip()
+        # 获取服务器公网 IP（使用多源获取函数）
+        log("获取服务器公网IP...")
+        server_ip = fetch_public_ip()
         if not server_ip:
-            # fallback: 使用本地命令
+            # 所有公网源都失败，使用内网IP作为最后备选
             ok, ip_out = run_command("hostname -I | awk '{print $1}'", quiet=True)
             if ok and ip_out.strip():
                 server_ip = ip_out.strip()
+                log(f"公网IP获取失败，使用内网IP: {server_ip}")
         if not server_ip:
             server_ip = "你的服务器IP"
+            log("⚠ 无法获取IP地址，请在管理面板手动设置")
+        else:
+            log(f"服务器IP: {server_ip}")
         config["server_ip"] = server_ip
         config["installed"] = True
         save_config()
@@ -1687,6 +1714,22 @@ def api_service_reinstall(name):
 def api_system_info():
     """系统信息"""
     return jsonify(get_system_info())
+
+
+@app.route("/api/system/refresh-ip", methods=["POST"])
+@login_required
+def api_refresh_ip():
+    """手动刷新公网IP（清除缓存并重新获取）"""
+    global _sysinfo_cache
+    # 清除旧的IP缓存
+    config["server_ip"] = ""
+    _sysinfo_cache = {"data": None, "time": 0}
+    # 重新获取公网IP
+    new_ip = fetch_public_ip()
+    if new_ip:
+        return jsonify({"success": True, "ip": new_ip, "message": f"公网IP已更新: {new_ip}"})
+    else:
+        return jsonify({"success": False, "ip": "", "message": "无法获取公网IP，请检查服务器网络连接"}), 500
 
 
 @app.route("/api/system/resources")
