@@ -1721,15 +1721,24 @@ def api_system_info():
 def api_refresh_ip():
     """手动刷新公网IP（清除缓存并重新获取）"""
     global _sysinfo_cache
-    # 清除旧的IP缓存
+    old_ip = config.get("server_ip", "")
+    # 临时清空，让 fetch_public_ip 重新写入
     config["server_ip"] = ""
     _sysinfo_cache = {"data": None, "time": 0}
-    # 重新获取公网IP
     new_ip = fetch_public_ip()
     if new_ip:
-        return jsonify({"success": True, "ip": new_ip, "message": f"公网IP已更新: {new_ip}"})
+        return jsonify({
+            "success": True, "ip": new_ip,
+            "message": f"公网IP已更新: {new_ip}"
+        })
     else:
-        return jsonify({"success": False, "ip": "", "message": "无法获取公网IP，请检查服务器网络连接"}), 500
+        # 获取失败，恢复旧值避免丢失
+        if old_ip and old_ip != "你的服务器IP":
+            config["server_ip"] = old_ip
+        return jsonify({
+            "success": False, "ip": old_ip,
+            "message": "无法获取公网IP，请检查服务器网络连接"
+        }), 500
 
 
 @app.route("/api/system/resources")

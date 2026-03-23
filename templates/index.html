@@ -2330,6 +2330,9 @@
 
         // ===== 仪表盘：系统信息 =====
         async function refreshPublicIP() {
+            const btn = document.querySelector('[onclick="refreshPublicIP()"]');
+            if (btn && btn.disabled) return;
+            if (btn) btn.disabled = true;
             const ipEl = document.getElementById('sys-ip');
             const origText = ipEl.textContent;
             ipEl.textContent = '获取中...';
@@ -2347,6 +2350,7 @@
                 ipEl.textContent = origText;
                 showDialog('error', '请求失败', '网络错误: ' + e.message);
             }
+            if (btn) btn.disabled = false;
         }
 
         async function refreshSystemInfo() {
