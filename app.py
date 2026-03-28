@@ -1925,6 +1925,15 @@ def api_service_reinstall(name):
                     config["tavern_password"] = reinstall_data["tavern_password"]
                 save_config()
                 force_remove_dir("/opt/sillytavern")
+                install_status["progress"] = 15
+                # 检查 Node.js 版本（SillyTavern 1.17+ 需要 >= 20）
+                ok, nv = run_command("node --version", quiet=True)
+                if ok and "v" in nv:
+                    ver = int(nv.strip().split(".")[0].replace("v", ""))
+                    if ver < 20:
+                        log(f"Node.js {nv.strip()} 版本过低，升级到 20...")
+                        install_status["message"] = "升级 Node.js 到 v20..."
+                        install_nodejs()
                 install_status["progress"] = 20
                 # 重新部署
                 if deploy_sillytavern():
