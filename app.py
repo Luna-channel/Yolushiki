@@ -871,9 +871,11 @@ def install_nodejs():
     success, output = run_command("node --version", quiet=True)
     if success and "v" in output:
         version = int(output.strip().split(".")[0].replace("v", ""))
-        if version >= 18:
+        if version >= 20:
             log(f"Node.js已安装: {output.strip()}")
             return True
+        else:
+            log(f"Node.js {output.strip()} 版本过低，SillyTavern 1.17+ 需要 Node >= 20，升级中...")
     log("安装Node.js 20.x...")
     # NodeSource 脚本支持 Debian/Ubuntu/RHEL/CentOS/Fedora
     run_command("curl -fsSL https://deb.nodesource.com/setup_20.x | bash -")
@@ -1350,11 +1352,11 @@ def do_install(generation):
         ok, out = run_command("node --version", quiet=True)
         if ok and "v" in out:
             ver = int(out.strip().split(".")[0].replace("v", ""))
-            if ver >= 18:
+            if ver >= 20:
                 log(f"Node.js 已安装: {out.strip()}")
                 has_nodejs = True
             else:
-                log(f"Node.js 版本过低: {out.strip()}，需要 v18+")
+                log(f"Node.js 版本过低: {out.strip()}，SillyTavern 需要 v20+")
         else:
             log("Node.js 未安装")
 
