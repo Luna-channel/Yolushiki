@@ -101,7 +101,7 @@ _SYSINFO_CACHE_TTL = 30  # 秒（IP/磁盘/内存不会频繁变化）
 # 镜像/加速配置（运行时可切换）
 runtime_mirrors = {
     "npm_registry": "",  # 空=官方源, 或 https://registry.npmmirror.com
-    "git_proxy": "",  # 空=直连GitHub, 或 https://gh.llkk.cc/
+    "git_proxy": "https://edgeone.gh-proxy.com/",  # 默认走代理，国内服务器直连GitHub大概率失败
 }
 
 # 插件列表（按分类排列，顺序决定前端渲染顺序）
@@ -255,6 +255,22 @@ def run_command(cmd, cwd=None, quiet=False):
         if not quiet:
             log(f"执行异常: {str(e)}")
         return False, str(e)
+
+
+def force_remove_dir(path):
+    """强力删除目录，处理 git 只读文件和残留锁文件问题"""
+    if not os.path.exists(path):
+        return True
+    # 先杀掉可能残留的 git 进程
+    run_command(f"pkill -f 'git.*{path}' 2>/dev/null || true", quiet=True)
+    # 移除只读属性（git pack 文件是只读的，会导致 rm 失败）
+    run_command(f"chmod -R u+w {path} 2>/dev/null || true", quiet=True)
+    # 删除
+    run_command(f"rm -rf {path}", quiet=True)
+    if os.path.exists(path):
+        log(f"rm -rf 未能删除 {path}，再次尝试...")
+        run_command(f"rm -rf {path}")
+    return not os.path.exists(path)
 
 
 def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
@@ -1048,14 +1064,10 @@ def deploy_sillytavern():
     log("部署SillyTavern...")
     tavern_dir = "/opt/sillytavern"
     package_json = os.path.join(tavern_dir, "package.json")
-    # 清理可能残留的 git 锁文件（上次操作被中断导致）
-    git_dir = os.path.join(tavern_dir, ".git")
-    if os.path.isdir(git_dir):
-        run_command(f"find {git_dir} -name '*.lock' -delete", quiet=True)
     # 检查 package.json 是否存在，目录存在但文件不存在说明之前克隆失败
     if os.path.exists(tavern_dir) and not os.path.exists(package_json):
-        log("检测到不完整的 SillyTavern 目录，清理后重新克隆...")
-        run_command(f"rm -rf {tavern_dir}")
+        log("检测到不完整的 SillyTavern 目录，强力清理后重新克隆...")
+        force_remove_dir(tavern_dir)
     if not os.path.exists(tavern_dir):
         log("克隆 SillyTavern 仓库...")
         install_status["message"] = "克隆 SillyTavern 仓库..."
@@ -1071,8 +1083,8 @@ def deploy_sillytavern():
             generation=install_generation,
         )
         if not success and git_proxy:
-            log("代理克隆失败，尝试直接连接 GitHub...")
-            run_command(f"rm -rf {tavern_dir}")
+            log("代理克隆失败，强力清理目录后尝试直连 GitHub...")
+            force_remove_dir(tavern_dir)
             success, _ = run_command_stream(
                 f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}",
                 generation=install_generation,
@@ -1254,9 +1266,23 @@ def install_astrbot_plugins(selected_plugins):
                 log(f"插件已存在: {plugin['name']}")
                 continue
             log(f"安装插件: {plugin['name']}")
-            success, _ = run_command(
-                f"git clone {plugin['repo']} {plugin_name}", cwd=plugins_dir
-            )
+            git_proxy = runtime_mirrors.get("git_proxy", "")
+            if git_proxy:
+                proxied_repo = f"{git_proxy}{plugin['repo']}"
+                log(f"使用代理克隆插件: {git_proxy}")
+                success, _ = run_command(
+                    f"git clone {proxied_repo} {plugin_name}", cwd=plugins_dir
+                )
+                if not success:
+                    log("代理克隆失败，尝试直连...")
+                    run_command(f"rm -rf {plugin_path}")
+                    success, _ = run_command(
+                        f"git clone {plugin['repo']} {plugin_name}", cwd=plugins_dir
+                    )
+            else:
+                success, _ = run_command(
+                    f"git clone {plugin['repo']} {plugin_name}", cwd=plugins_dir
+                )
             if not success:
                 log(f"插件安装失败: {plugin['name']}")
 
@@ -1662,7 +1688,7 @@ def system_uninstall():
         if remove_sillytavern:
             run_command("pm2 delete sillytavern 2>/dev/null", quiet=True)
             if remove_data:
-                run_command("rm -rf /opt/sillytavern", quiet=True)
+                force_remove_dir("/opt/sillytavern")
                 results.append("✓ 已删除 SillyTavern 数据 (/opt/sillytavern)")
             else:
                 results.append("✓ 已停止 SillyTavern（数据保留）")
@@ -1886,7 +1912,7 @@ def api_service_reinstall(name):
                 if reinstall_data.get("tavern_password"):
                     config["tavern_password"] = reinstall_data["tavern_password"]
                 save_config()
-                run_command("rm -rf /opt/sillytavern")
+                force_remove_dir("/opt/sillytavern")
                 install_status["progress"] = 20
                 # 重新部署
                 if deploy_sillytavern():
@@ -2201,8 +2227,10 @@ def set_mirrors():
         return jsonify({"success": True, "message": msg})
     elif mirror_type == "git":
         git_map = {
-            "ghproxy": "https://gh.llkk.cc/",
-            "gitclone": "https://gitclone.com/github.com/",
+            "edgeone": "https://edgeone.gh-proxy.com/",
+            "hk": "https://hk.gh-proxy.com/",
+            "ghproxy": "https://gh-proxy.com/",
+            "llkk": "https://gh.llkk.cc/",
             "direct": "",
         }
         runtime_mirrors["git_proxy"] = git_map.get(mirror_value, mirror_value)
@@ -2305,7 +2333,7 @@ def retry_current_stage():
                 install_status["message"] = "重试克隆 SillyTavern..."
                 install_status["current_stage"] = "git_clone"
                 tavern_dir = "/opt/sillytavern"
-                run_command(f"rm -rf {tavern_dir}")
+                force_remove_dir(tavern_dir)
                 if not deploy_sillytavern():
                     raise Exception("SillyTavern部署失败")
                 _finish_install(current_gen)
