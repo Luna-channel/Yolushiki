@@ -476,9 +476,35 @@ echo -e "      ${GREEN}✓${NC} 安装向导已就绪"
 
 echo -e "${BLUE}[5/5]${NC} 启动管理面板..."
 
-# 获取服务器IP
+# 获取服务器公网IP（多源 + 验证 + 过滤私网）
 echo -e "      ${YELLOW}⚙${NC}  获取服务器IP..."
-SERVER_IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || curl -s --connect-timeout 5 ip.sb 2>/dev/null || hostname -I | awk '{print $1}')
+SERVER_IP=""
+for ip_src in \
+    "curl -s --connect-timeout 5 --max-time 8 ifconfig.me" \
+    "curl -s --connect-timeout 5 --max-time 8 ip.sb" \
+    "curl -s --connect-timeout 5 --max-time 8 ipinfo.io/ip" \
+    "curl -s --connect-timeout 5 --max-time 8 icanhazip.com" \
+    "curl -s --connect-timeout 5 --max-time 8 api.ipify.org" \
+    "curl -s --connect-timeout 5 --max-time 8 checkip.amazonaws.com" \
+    "wget -qO- --timeout=8 ifconfig.me" \
+    "wget -qO- --timeout=8 ip.sb"; do
+    _ip=$(eval "$ip_src" 2>/dev/null | tr -d '[:space:]')
+    # 验证格式：纯数字+点，长度<=15
+    if [ -n "$_ip" ] && echo "$_ip" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+        # 过滤私网地址
+        if echo "$_ip" | grep -qE '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)'; then
+            continue
+        fi
+        SERVER_IP="$_ip"
+        break
+    fi
+done
+# 所有外网源都失败时，fallback 到内网IP并提示
+if [ -z "$SERVER_IP" ]; then
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    echo -e "      ${YELLOW}⚠${NC}  未能获取公网IP，使用内网IP: ${SERVER_IP}"
+    echo -e "      ${YELLOW}⚠${NC}  请手动将下方链接中的IP替换为你的服务器公网IP"
+fi
 
 # 放行管理面板端口
 if command -v ufw &> /dev/null; then

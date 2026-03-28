@@ -720,6 +720,58 @@ def configure_docker_mirrors():
         log(f"配置镜像加速失败: {e}")
 
 
+# 国内 Docker Hub 代理前缀（按稳定性排序）
+DOCKER_PROXY_PREFIXES = [
+    "dockerpull.org",
+    "docker.1ms.run",
+    "docker.xuanyuan.me",
+    "docker.m.daocloud.io",
+    "hub.rat.dev",
+    "docker.awsl9527.cn",
+]
+
+
+def pull_single_image_via_proxy(image, generation=None):
+    """通过国内代理前缀拉取单个 Docker 镜像，成功后 retag 为原名
+    返回 True/False
+    """
+    # 先检查本地是否已有
+    ok, _ = run_command(f"docker image inspect {image}", quiet=True)
+    if ok:
+        log(f"镜像已存在本地: {image}")
+        return True
+    for proxy in DOCKER_PROXY_PREFIXES:
+        proxy_image = f"{proxy}/{image}"
+        log(f"尝试代理拉取: {proxy_image}")
+        install_status["message"] = f"通过 {proxy} 拉取 {image}..."
+        ok, _ = run_command_stream(
+            f"docker pull {proxy_image}",
+            timeout=600,
+            generation=generation,
+        )
+        if ok:
+            # retag 为原始镜像名
+            run_command(f"docker tag {proxy_image} {image}", quiet=True)
+            run_command(f"docker rmi {proxy_image}", quiet=True)
+            log(f"✓ 镜像拉取成功: {image}（来源: {proxy}）")
+            return True
+        else:
+            log(f"✗ {proxy} 拉取失败，尝试下一个...")
+    return False
+
+
+def pull_all_images_via_proxy(generation=None):
+    """通过代理前缀拉取所有需要的 Docker 镜像
+    返回 True 表示全部成功
+    """
+    images = ["soulter/astrbot:latest", "mlikiowa/napcat-docker:latest"]
+    for img in images:
+        if not pull_single_image_via_proxy(img, generation=generation):
+            log(f"❌ 所有代理源均无法拉取 {img}")
+            return False
+    return True
+
+
 def check_and_fix_dns():
     """检查 DNS 是否正常工作（通过实际连接测试而非 IP 白名单）"""
     # 测试域名：能解析 + 能连上才算正常
@@ -953,24 +1005,28 @@ def deploy_astrbot():
     # 确保 NapCat 挂载目录存在
     for sub in ["napcat/config", "ntqq", "data"]:
         os.makedirs(os.path.join(astrbot_dir, sub), exist_ok=True)
-    # 拉取镜像：直接用流式模式，实时显示进度
-    log("拉取Docker镜像（实时进度）...")
+    # 拉取镜像：优先通过国内代理前缀逐个拉取，失败再 fallback 到 compose pull
+    log("拉取Docker镜像...")
     install_status["message"] = "拉取 Docker 镜像中..."
     install_status["current_stage"] = "docker_pull"
-    pull_ok, _ = run_command_stream(
-        "docker compose -f astrbot.yml pull",
-        cwd=astrbot_dir,
-        generation=install_generation,
-    )
+    pull_ok = pull_all_images_via_proxy(generation=install_generation)
     if not pull_ok:
+        log("代理拉取未全部成功，尝试 docker compose pull（走 daemon 镜像加速）...")
+        install_status["message"] = "通过 docker compose 拉取镜像..."
         pull_ok, _ = run_command_stream(
-            "docker-compose -f astrbot.yml pull",
+            "docker compose -f astrbot.yml pull",
             cwd=astrbot_dir,
             generation=install_generation,
         )
+        if not pull_ok:
+            pull_ok, _ = run_command_stream(
+                "docker-compose -f astrbot.yml pull",
+                cwd=astrbot_dir,
+                generation=install_generation,
+            )
     if not pull_ok:
         log(
-            "❌ Docker镜像拉取失败。可能原因：网络连接不稳定或镜像源不可用。建议操作：点击安装页面的‘镜像加速’按钮更换加速源后重试"
+            "❌ Docker镜像拉取失败。可能原因：网络连接不稳定或镜像源不可用。建议操作：点击安装页面的'镜像加速'按钮更换加速源后重试"
         )
         return False
     # 启动容器
@@ -2201,20 +2257,24 @@ def retry_current_stage():
         global install_status
         try:
             if current_stage == "docker_pull":
-                install_status["message"] = "重试拉取 Docker 镜像..."
+                install_status["message"] = "重试拉取 Docker 镜像（代理模式）..."
                 install_status["current_stage"] = "docker_pull"
                 astrbot_dir = "/opt/astrbot"
-                pull_ok, _ = run_command_stream(
-                    "docker compose -f astrbot.yml pull",
-                    cwd=astrbot_dir,
-                    generation=current_gen,
-                )
+                pull_ok = pull_all_images_via_proxy(generation=current_gen)
                 if not pull_ok:
+                    log("代理拉取未全部成功，尝试 docker compose pull...")
+                    install_status["message"] = "通过 docker compose 拉取镜像..."
                     pull_ok, _ = run_command_stream(
-                        "docker-compose -f astrbot.yml pull",
+                        "docker compose -f astrbot.yml pull",
                         cwd=astrbot_dir,
                         generation=current_gen,
                     )
+                    if not pull_ok:
+                        pull_ok, _ = run_command_stream(
+                            "docker-compose -f astrbot.yml pull",
+                            cwd=astrbot_dir,
+                            generation=current_gen,
+                        )
                 if not pull_ok:
                     raise Exception("Docker镜像拉取失败")
                 # 继续完成后续步骤
