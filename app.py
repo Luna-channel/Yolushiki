@@ -493,7 +493,7 @@ def service_action(name, action):
                 # 进程不存在，重新创建
                 run_command("pm2 delete sillytavern 2>/dev/null || true", quiet=True)
                 ok, out = run_command(
-                    'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
+                    'pm2 start server.js --name "sillytavern"',
                     cwd="/opt/sillytavern",
                     quiet=True,
                 )
@@ -1199,7 +1199,7 @@ def deploy_sillytavern():
     log("使用PM2启动SillyTavern...")
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
-        'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
+        'pm2 start server.js --name "sillytavern"',
         cwd=tavern_dir,
     )
     if success:
@@ -2477,7 +2477,7 @@ def _continue_sillytavern_config(tavern_dir):
     log("使用PM2启动SillyTavern...")
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
-        'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
+        'pm2 start server.js --name "sillytavern"',
         cwd=tavern_dir,
     )
     if success:
