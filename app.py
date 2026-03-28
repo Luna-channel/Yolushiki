@@ -865,30 +865,79 @@ def check_and_fix_dns():
     return True
 
 
+def _check_node_version():
+    """检查当前 Node.js 版本，返回 (已安装, 主版本号)"""
+    ok, out = run_command("node --version", quiet=True)
+    if ok and "v" in out:
+        ver = int(out.strip().split(".")[0].replace("v", ""))
+        return True, ver
+    return False, 0
+
+
 def install_nodejs():
-    """安装Node.js"""
+    """安装Node.js 20+，多种方式兜底"""
     log("检查Node.js...")
-    success, output = run_command("node --version", quiet=True)
-    if success and "v" in output:
-        version = int(output.strip().split(".")[0].replace("v", ""))
-        if version >= 20:
-            log(f"Node.js已安装: {output.strip()}")
-            return True
-        else:
-            log(f"Node.js {output.strip()} 版本过低，SillyTavern 1.17+ 需要 Node >= 20，升级中...")
-    log("安装Node.js 20.x...")
-    # NodeSource 脚本支持 Debian/Ubuntu/RHEL/CentOS/Fedora
-    run_command("curl -fsSL https://deb.nodesource.com/setup_20.x | bash -")
+    installed, ver = _check_node_version()
+    if installed and ver >= 20:
+        log(f"Node.js 已安装: v{ver}")
+        return True
+    if installed:
+        log(f"Node.js v{ver} 版本过低，SillyTavern 1.17+ 需要 Node >= 20，升级中...")
     pm = detect_pkg_manager()
-    if pm == "apt-get":
-        success, _ = run_command("apt-get install -y nodejs")
-    elif pm in ("dnf", "yum"):
-        success, _ = run_command(f"{pm} install -y nodejs")
-    elif pm == "pacman":
-        success, _ = run_command("pacman -S --noconfirm nodejs npm")
+
+    # 方式1: NodeSource（海外服务器优先）
+    log("安装Node.js 20.x（方式1: NodeSource）...")
+    ok, _ = run_command("curl -fsSL https://deb.nodesource.com/setup_20.x | bash -")
+    if ok:
+        if pm == "apt-get":
+            run_command("apt-get install -y nodejs")
+        elif pm in ("dnf", "yum"):
+            run_command(f"{pm} install -y nodejs")
+        _, new_ver = _check_node_version()
+        if new_ver >= 20:
+            log(f"Node.js v{new_ver} 安装成功（NodeSource）")
+            return True
+
+    # 方式2: dnf module（CentOS/RHEL 8+）
+    if pm in ("dnf", "yum"):
+        log("NodeSource 失败，尝试方式2: dnf module...")
+        run_command("dnf module reset nodejs -y 2>/dev/null", quiet=True)
+        ok, _ = run_command("dnf module enable nodejs:20 -y")
+        if ok:
+            run_command(f"{pm} install -y nodejs --allowerasing")
+            _, new_ver = _check_node_version()
+            if new_ver >= 20:
+                log(f"Node.js v{new_ver} 安装成功（dnf module）")
+                return True
+
+    # 方式3: 直接下载二进制文件（国内镜像，最可靠的兜底）
+    log("尝试方式3: 从国内镜像下载 Node.js 二进制文件...")
+    arch_map = {"x86_64": "x64", "aarch64": "arm64", "armv7l": "armv7l"}
+    ok, arch_out = run_command("uname -m", quiet=True)
+    arch = arch_map.get(arch_out.strip(), "x64") if ok else "x64"
+    node_ver = "v20.19.0"
+    filename = f"node-{node_ver}-linux-{arch}.tar.xz"
+    mirrors = [
+        f"https://npmmirror.com/mirrors/node/{node_ver}/{filename}",
+        f"https://nodejs.org/dist/{node_ver}/{filename}",
+    ]
+    for url in mirrors:
+        log(f"下载: {url}")
+        ok, _ = run_command(f"curl -fsSL -o /tmp/{filename} {url}")
+        if ok:
+            break
     else:
-        success, _ = run_command("apt-get install -y nodejs")
-    return success
+        log("❌ 所有下载源均失败")
+        return False
+    # 解压安装到 /usr/local
+    run_command(f"tar -xJf /tmp/{filename} -C /usr/local --strip-components=1")
+    run_command(f"rm -f /tmp/{filename}")
+    _, new_ver = _check_node_version()
+    if new_ver >= 20:
+        log(f"Node.js v{new_ver} 安装成功（二进制安装）")
+        return True
+    log("❌ Node.js 20 安装失败，所有方式均已尝试")
+    return False
 
 
 def install_pm2():
