@@ -18,7 +18,16 @@ import time
 import socket
 import functools
 import hashlib
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for, send_file
+from flask import (
+    Flask,
+    render_template,
+    jsonify,
+    request,
+    session,
+    redirect,
+    url_for,
+    send_file,
+)
 
 app = Flask(__name__)
 
@@ -35,7 +44,7 @@ DEFAULT_CONFIG = {
     "tavern_port": 18888,
     "install_plugins": True,
     "server_ip": "",
-    "secret_key": None
+    "secret_key": None,
 }
 
 
@@ -74,7 +83,7 @@ install_status = {
     "message": "",
     "logs": [],
     "results": {},
-    "current_stage": ""  # docker_pull, git_clone, npm_install, 等
+    "current_stage": "",  # docker_pull, git_clone, npm_install, 等
 }
 install_generation = 0  # 安装代数，重试时递增，旧线程检测到不匹配则退出
 MAX_LOG_BYTES = 2 * 1024 * 1024  # 日志总内存上限 2MB
@@ -90,8 +99,8 @@ _SYSINFO_CACHE_TTL = 30  # 秒（IP/磁盘/内存不会频繁变化）
 
 # 镜像/加速配置（运行时可切换）
 runtime_mirrors = {
-    "npm_registry": "",       # 空=官方源, 或 https://registry.npmmirror.com
-    "git_proxy": "",          # 空=直连GitHub, 或 https://gh.llkk.cc/
+    "npm_registry": "",  # 空=官方源, 或 https://registry.npmmirror.com
+    "git_proxy": "",  # 空=直连GitHub, 或 https://gh.llkk.cc/
 }
 
 # 插件列表（按分类排列，顺序决定前端渲染顺序）
@@ -103,7 +112,7 @@ ASTRBOT_PLUGINS = [
         "description": "排错必备，详细日志记录",
         "category": "必装",
         "selected": True,
-        "required": True
+        "required": True,
     },
     # ── 机器人管理类 ──
     {
@@ -111,21 +120,21 @@ ASTRBOT_PLUGINS = [
         "repo": "https://github.com/Zhalslar/astrbot_plugin_relationship.git",
         "description": "管理好友关系",
         "category": "机器人管理类",
-        "selected": True
+        "selected": True,
     },
     {
         "name": "QQ群管",
         "repo": "https://github.com/Zhalslar/astrbot_plugin_qqadmin.git",
         "description": "QQ群管理功能",
         "category": "机器人管理类",
-        "selected": True
+        "selected": True,
     },
     {
         "name": "使用状况查看",
         "repo": "https://github.com/Luna-channel/astrbot_plugin_hangout.git",
         "description": "查看机器人使用状况统计",
         "category": "机器人管理类",
-        "selected": True
+        "selected": True,
     },
     # ── 聊天优化类 ──
     {
@@ -134,7 +143,7 @@ ASTRBOT_PLUGINS = [
         "description": "LLM主动问候回复，适合机器人好友多的情况",
         "category": "聊天优化类",
         "selected": True,
-        "conflict_note": "⚠️ 可能与「群聊主动回复Plus」冲突，建议二选一"
+        "conflict_note": "⚠️ 可能与「群聊主动回复Plus」冲突，建议二选一",
     },
     {
         "name": "群聊主动回复Plus",
@@ -142,28 +151,28 @@ ASTRBOT_PLUGINS = [
         "description": "功能强大的主动回复，token消耗高，设置复杂但非常强大，推荐等上手之后安装",
         "category": "聊天优化类",
         "selected": False,
-        "conflict_note": "⚠️ 可能与「Conversa 主动回复」冲突，建议二选一"
+        "conflict_note": "⚠️ 可能与「Conversa 主动回复」冲突，建议二选一",
     },
     {
         "name": "机器人防尬聊弱黑名单",
         "repo": "https://github.com/Luna-channel/astrbot_plugin_Random_Reply.git",
         "description": "群聊里防止多个机器人无限聊天",
         "category": "聊天优化类",
-        "selected": True
+        "selected": True,
     },
     {
         "name": "用户画像记忆 (SoulMap)",
         "repo": "https://github.com/Luna-channel/astrbot_plugin_soulmap.git",
         "description": "用户画像记忆辅助系统",
         "category": "聊天优化类",
-        "selected": True
+        "selected": True,
     },
     {
         "name": "好感度Pro（鸭版）",
         "repo": "https://github.com/Luna-channel/astrbot_plugin_favourpro.git",
         "description": "好感度系统",
         "category": "聊天优化类",
-        "selected": True
+        "selected": True,
     },
     # ── 其他功能类 ──
     {
@@ -171,15 +180,15 @@ ASTRBOT_PLUGINS = [
         "repo": "https://github.com/SXP-Simon/astrbot_plugin_qq_group_daily_analysis.git",
         "description": "QQ群聊天总结分析",
         "category": "其他功能类",
-        "selected": False
+        "selected": False,
     },
     {
         "name": "表情包发送",
         "repo": "https://github.com/LunarMeal/astrbot_plugin_memes.git",
         "description": "发送表情包（类似插件很多，也可在插件市场自选）",
         "category": "其他功能类",
-        "selected": False
-    }
+        "selected": False,
+    },
 ]
 
 # ========== 认证中间件 ==========
@@ -190,6 +199,7 @@ AUTH_EXEMPT = {"/login", "/api/auth/login", "/api/auth/setup", "/api/auth/check"
 
 def login_required(f):
     """登录验证装饰器"""
+
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         if not config.get("token"):
@@ -202,6 +212,7 @@ def login_required(f):
                 return jsonify({"error": "未登录", "code": 401}), 401
             return redirect(url_for("login_page"))
         return f(*args, **kwargs)
+
     return decorated
 
 
@@ -210,7 +221,7 @@ def log(message):
     global _log_bytes
     timestamp = time.strftime("%H:%M:%S")
     log_entry = f"[{timestamp}] {message}"
-    entry_size = len(log_entry.encode('utf-8', errors='replace'))
+    entry_size = len(log_entry.encode("utf-8", errors="replace"))
     install_status["logs"].append(log_entry)
     _log_bytes += entry_size
     # 超过上限时砍掉前半部分
@@ -218,7 +229,7 @@ def log(message):
         half = len(install_status["logs"]) // 2
         removed = install_status["logs"][:half]
         install_status["logs"] = install_status["logs"][half:]
-        _log_bytes -= sum(len(e.encode('utf-8', errors='replace')) for e in removed)
+        _log_bytes -= sum(len(e.encode("utf-8", errors="replace")) for e in removed)
     print(log_entry)
 
 
@@ -228,8 +239,7 @@ def run_command(cmd, cwd=None, quiet=False):
         log(f"执行: {cmd}")
     try:
         result = subprocess.run(
-            cmd, shell=True, cwd=cwd,
-            capture_output=True, text=True, timeout=600
+            cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=600
         )
         if result.returncode != 0:
             if not quiet:
@@ -254,9 +264,13 @@ def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
     log(f"执行: {cmd}")
     try:
         process = subprocess.Popen(
-            cmd, shell=True, cwd=cwd,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1
+            cmd,
+            shell=True,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
         )
         # 只保留最后100行输出，避免内存积累
         output_lines = []
@@ -294,6 +308,7 @@ def run_command_stream(cmd, cwd=None, timeout=600, generation=None):
 
 # ========== 服务管理 ==========
 
+
 def check_port_health(port, timeout=2):
     """检查本地端口是否可达（TCP连接测试）"""
     try:
@@ -330,14 +345,24 @@ def get_service_status(name):
                             "cpu": p.get("monit", {}).get("cpu", 0),
                         }
                         if result["status"] == "online":
-                            result["health_ok"] = check_port_health(port_map["sillytavern"])
+                            result["health_ok"] = check_port_health(
+                                port_map["sillytavern"]
+                            )
                         else:
                             result["health_ok"] = False
                         return result
             except (json.JSONDecodeError, KeyError):
                 pass
-        return {"name": "sillytavern", "status": "stopped", "pid": 0,
-                "uptime": 0, "restarts": 0, "memory": 0, "cpu": 0, "health_ok": False}
+        return {
+            "name": "sillytavern",
+            "status": "stopped",
+            "pid": 0,
+            "uptime": 0,
+            "restarts": 0,
+            "memory": 0,
+            "cpu": 0,
+            "health_ok": False,
+        }
     else:
         # Docker 容器 (astrbot / napcat)
         ok, output = run_command(
@@ -350,24 +375,41 @@ def get_service_status(name):
         if status == "running":
             ok2, stats_out = run_command(
                 f"docker stats {name} --no-stream --format='{{{{.MemUsage}}}}|||{{{{.CPUPerc}}}}'",
-                quiet=True
+                quiet=True,
             )
             if ok2:
                 try:
                     parts = stats_out.strip().strip("'").split("|||")
                     mem_str = parts[0].split("/")[0].strip()
                     if "GiB" in mem_str:
-                        mem = int(float(mem_str.replace("GiB", "").strip()) * 1024 * 1024 * 1024)
+                        mem = int(
+                            float(mem_str.replace("GiB", "").strip())
+                            * 1024
+                            * 1024
+                            * 1024
+                        )
                     elif "MiB" in mem_str:
-                        mem = int(float(mem_str.replace("MiB", "").strip()) * 1024 * 1024)
+                        mem = int(
+                            float(mem_str.replace("MiB", "").strip()) * 1024 * 1024
+                        )
                     elif "KiB" in mem_str:
                         mem = int(float(mem_str.replace("KiB", "").strip()) * 1024)
                     cpu = float(parts[1].replace("%", "").strip())
                 except (IndexError, ValueError):
                     pass
-        health_ok = check_port_health(port_map.get(name, 0)) if status == "running" else False
-        return {"name": name, "status": status, "pid": 0,
-                "uptime": 0, "restarts": 0, "memory": mem, "cpu": cpu, "health_ok": health_ok}
+        health_ok = (
+            check_port_health(port_map.get(name, 0)) if status == "running" else False
+        )
+        return {
+            "name": name,
+            "status": status,
+            "pid": 0,
+            "uptime": 0,
+            "restarts": 0,
+            "memory": mem,
+            "cpu": cpu,
+            "health_ok": health_ok,
+        }
 
 
 def check_napcat_error():
@@ -375,7 +417,15 @@ def check_napcat_error():
     ok, output = run_command("docker logs napcat --tail 30 2>&1", quiet=True)
     if not ok or not output:
         return ""
-    error_keywords = ["error", "failed", "断开", "disconnect", "ECONNREFUSED", "timeout", "登录失败"]
+    error_keywords = [
+        "error",
+        "failed",
+        "断开",
+        "disconnect",
+        "ECONNREFUSED",
+        "timeout",
+        "登录失败",
+    ]
     lines = output.strip().split("\n")
     for line in reversed(lines):
         lower = line.lower()
@@ -387,7 +437,10 @@ def check_napcat_error():
 def get_all_services_status():
     """获取所有服务状态（带缓存，减少 subprocess 调用）"""
     now = time.time()
-    if _status_cache["data"] is not None and (now - _status_cache["time"]) < _STATUS_CACHE_TTL:
+    if (
+        _status_cache["data"] is not None
+        and (now - _status_cache["time"]) < _STATUS_CACHE_TTL
+    ):
         return _status_cache["data"]
     statuses = {
         "napcat": get_service_status("napcat"),
@@ -399,7 +452,9 @@ def get_all_services_status():
         napcat_err = check_napcat_error()
         if napcat_err:
             statuses["napcat"]["last_error"] = napcat_err
-            statuses["napcat"]["error_hint"] = "检测到连接异常，建议重启NapCat后重新扫码登录"
+            statuses["napcat"]["error_hint"] = (
+                "检测到连接异常，建议重启NapCat后重新扫码登录"
+            )
     _status_cache["data"] = statuses
     _status_cache["time"] = now
     return statuses
@@ -422,7 +477,8 @@ def service_action(name, action):
                 run_command("pm2 delete sillytavern 2>/dev/null || true", quiet=True)
                 ok, out = run_command(
                     'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
-                    cwd="/opt/sillytavern", quiet=True
+                    cwd="/opt/sillytavern",
+                    quiet=True,
                 )
             run_command("pm2 save", quiet=True)
         else:
@@ -446,7 +502,9 @@ def service_action(name, action):
 def get_service_logs(name, lines=50):
     """获取服务日志"""
     if name == "sillytavern":
-        ok, output = run_command(f"pm2 logs sillytavern --nostream --lines {lines}", quiet=True)
+        ok, output = run_command(
+            f"pm2 logs sillytavern --nostream --lines {lines}", quiet=True
+        )
     else:
         # docker logs 输出到 stderr，必须用 2>&1 合并
         ok, output = run_command(f"docker logs --tail {lines} {name} 2>&1", quiet=True)
@@ -469,7 +527,12 @@ def fetch_public_ip():
         if ok and out:
             ip = out.strip()
             # 验证是否为有效的IP格式（简单校验：包含点且不含非法字符）
-            if ip and "." in ip and len(ip) <= 15 and all(c.isdigit() or c == '.' for c in ip):
+            if (
+                ip
+                and "." in ip
+                and len(ip) <= 15
+                and all(c.isdigit() or c == "." for c in ip)
+            ):
                 # 成功获取，保存到配置避免重复请求
                 config["server_ip"] = ip
                 save_config()
@@ -480,7 +543,10 @@ def fetch_public_ip():
 def get_system_info():
     """获取系统信息（带缓存，减少外部请求和 subprocess 调用）"""
     now = time.time()
-    if _sysinfo_cache["data"] is not None and (now - _sysinfo_cache["time"]) < _SYSINFO_CACHE_TTL:
+    if (
+        _sysinfo_cache["data"] is not None
+        and (now - _sysinfo_cache["time"]) < _SYSINFO_CACHE_TTL
+    ):
         return _sysinfo_cache["data"]
     info = {}
     # IP（优先用已保存的，避免反复 curl 外网）
@@ -535,8 +601,7 @@ def get_napcat_token():
             pass
     # 方法2：docker exec 读取容器内文件
     ok, output = run_command(
-        "docker exec napcat cat /app/napcat/config/webui.json",
-        quiet=True
+        "docker exec napcat cat /app/napcat/config/webui.json", quiet=True
     )
     if ok:
         try:
@@ -551,51 +616,55 @@ def get_napcat_token():
 
 _cached_pkg_manager = None
 
+
 def detect_pkg_manager():
     """检测系统包管理器，支持多发行版（结果缓存）"""
     global _cached_pkg_manager
     if _cached_pkg_manager is not None:
         return _cached_pkg_manager
-    for cmd in ['apt-get', 'dnf', 'yum', 'pacman', 'zypper']:
+    for cmd in ["apt-get", "dnf", "yum", "pacman", "zypper"]:
         ok, _ = run_command(f"which {cmd}", quiet=True)
         if ok:
             _cached_pkg_manager = cmd
             return cmd
-    _cached_pkg_manager = 'apt-get'
-    return 'apt-get'
+    _cached_pkg_manager = "apt-get"
+    return "apt-get"
 
 
 def pkg_update():
     """通用包列表更新"""
     pm = detect_pkg_manager()
     ok = False
-    if pm == 'apt-get':
+    if pm == "apt-get":
         ok, _ = run_command("apt-get update -qq")
-    elif pm in ('dnf', 'yum'):
+    elif pm in ("dnf", "yum"):
         ok, _ = run_command(f"{pm} makecache -q")
-    elif pm == 'pacman':
+    elif pm == "pacman":
         ok, _ = run_command("pacman -Sy --noconfirm")
-    elif pm == 'zypper':
+    elif pm == "zypper":
         ok, _ = run_command("zypper refresh -q")
     if not ok:
-        log("⚠ 系统包列表更新失败，可能原因：网络不通或软件源不可用。后续安装可能受影响，但会继续尝试")
+        log(
+            "⚠ 系统包列表更新失败，可能原因：网络不通或软件源不可用。后续安装可能受影响，但会继续尝试"
+        )
 
 
 def pkg_install(packages):
     """通用包安装"""
     pm = detect_pkg_manager()
-    if pm == 'apt-get':
+    if pm == "apt-get":
         return run_command(f"apt-get install -y -qq {packages}")
-    elif pm in ('dnf', 'yum'):
+    elif pm in ("dnf", "yum"):
         return run_command(f"{pm} install -y -q {packages}")
-    elif pm == 'pacman':
+    elif pm == "pacman":
         return run_command(f"pacman -S --noconfirm --needed {packages}")
-    elif pm == 'zypper':
+    elif pm == "zypper":
         return run_command(f"zypper install -y -n {packages}")
     return False, "未知包管理器"
 
 
 # ========== 部署函数（保留 Phase 1 逻辑） ==========
+
 
 def install_docker():
     """安装Docker"""
@@ -603,8 +672,11 @@ def install_docker():
     success, output = run_command("docker --version", quiet=True)
     if success:
         log(f"Docker已安装: {output.strip()}")
-        # 确保 Docker 开机自启（预装的 Docker 可能未 enable）
+        # 确保 Docker 已启动且开机自启（预装的 Docker 可能未 start/enable）
+        run_command("systemctl start docker", quiet=True)
         run_command("systemctl enable docker", quiet=True)
+        # 确保镜像加速已配置（预装的 Docker 可能没配加速）
+        configure_docker_mirrors()
         return True
     log("Docker未安装，开始安装...")
     success, _ = run_command("curl -fsSL https://get.docker.com | bash")
@@ -631,13 +703,13 @@ def configure_docker_mirrors():
         except:
             pass
     log("配置Docker镜像加速...")
-    mirror_config = '''{
+    mirror_config = """{
   "registry-mirrors": [
-    "https://docker.1panel.live",
-    "https://dockerproxy.cn",
-    "https://docker.m.daocloud.io"
+    "https://docker.xuanyuan.me",
+    "https://docker.m.daocloud.io",
+    "https://docker.1ms.run"
   ]
-}'''
+}"""
     try:
         with open(daemon_json, "w") as f:
             f.write(mirror_config)
@@ -649,39 +721,45 @@ def configure_docker_mirrors():
 
 
 def check_and_fix_dns():
-    """检查 DNS 是否被污染，自动修复"""
-    test_domains = [
-        ("registry-1.docker.io", [
-            "34.", "44.", "52.", "54.", "18.", "3.", "13.", "99.", "143.", "108.",
-            "104.", "185.199.", "140.82."
-        ]),
-        ("deb.nodesource.com", []),
+    """检查 DNS 是否正常工作（通过实际连接测试而非 IP 白名单）"""
+    # 测试域名：能解析 + 能连上才算正常
+    test_targets = [
+        ("registry-1.docker.io", 443),
+        ("registry.npmmirror.com", 443),
     ]
     dns_ok = True
-    for domain, valid_prefixes in test_domains:
+    for domain, port in test_targets:
         try:
             ip = socket.gethostbyname(domain)
-            if valid_prefixes:
-                if not any(ip.startswith(p) for p in valid_prefixes):
-                    log(f"⚠ DNS 异常: {domain} → {ip}（不是有效的 IP 段）")
-                    dns_ok = False
-                else:
-                    log(f"DNS 正常: {domain} → {ip}")
-            else:
-                log(f"DNS 解析: {domain} → {ip}")
-        except Exception as e:
+            log(f"DNS 解析: {domain} → {ip}")
+            # 实际 TCP 连接测试（3 秒超时）
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            try:
+                sock.connect((ip, port))
+                log(f"连接测试: {domain}:{port} 正常")
+            except Exception:
+                log(f"⚠ 连接失败: {domain}:{port}（IP={ip}），可能被污染或网络不通")
+                dns_ok = False
+            finally:
+                sock.close()
+        except socket.gaierror as e:
             log(f"⚠ DNS 解析失败: {domain} → {e}")
             dns_ok = False
 
     if not dns_ok:
-        log("检测到 DNS 污染，尝试自动修复...")
-        log("切换 DNS 为 Google(8.8.8.8) + Cloudflare(1.1.1.1)...")
+        log("检测到 DNS 或网络异常，尝试自动修复 DNS...")
+        log("切换 DNS 为 阿里(223.5.5.5) + 腾讯(119.29.29.29)...")
         # 方法1: 修改 systemd-resolved 配置
         resolved_conf = "/etc/systemd/resolved.conf"
         if os.path.exists(resolved_conf):
             try:
                 with open(resolved_conf, "w") as f:
-                    f.write("[Resolve]\nDNS=8.8.8.8 1.1.1.1\nFallbackDNS=8.8.4.4 1.0.0.1\n")
+                    f.write(
+                        "[Resolve]\n"
+                        "DNS=223.5.5.5 119.29.29.29\n"
+                        "FallbackDNS=8.8.8.8 1.1.1.1\n"
+                    )
                 run_command("systemctl restart systemd-resolved", quiet=True)
                 log("systemd-resolved DNS 已更新")
             except Exception as e:
@@ -689,20 +767,28 @@ def check_and_fix_dns():
         # 方法2: 直接写 resolv.conf（兜底）
         try:
             resolv = "/etc/resolv.conf"
-            # 判断是否是符号链接（systemd-resolved 管理的情况）
             if not os.path.islink(resolv):
                 with open(resolv, "w") as f:
-                    f.write("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+                    f.write("nameserver 223.5.5.5\nnameserver 119.29.29.29\n")
                 log("resolv.conf DNS 已更新")
         except Exception as e:
             log(f"修改 resolv.conf 失败: {e}")
         # 验证修复
-        time.sleep(1)
-        try:
-            ip = socket.gethostbyname("registry-1.docker.io")
-            log(f"修复后验证: registry-1.docker.io → {ip}")
-        except Exception as e:
-            log(f"修复后验证失败: {e}，请手动检查 DNS 配置")
+        time.sleep(2)
+        for domain, port in test_targets:
+            try:
+                ip = socket.gethostbyname(domain)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(5)
+                try:
+                    sock.connect((ip, port))
+                    log(f"修复后验证: {domain} → {ip} 连接正常")
+                except Exception:
+                    log(f"修复后验证: {domain} → {ip} 仍无法连接")
+                finally:
+                    sock.close()
+            except Exception as e:
+                log(f"修复后验证失败: {domain} → {e}")
     return dns_ok
 
 
@@ -719,11 +805,11 @@ def install_nodejs():
     # NodeSource 脚本支持 Debian/Ubuntu/RHEL/CentOS/Fedora
     run_command("curl -fsSL https://deb.nodesource.com/setup_20.x | bash -")
     pm = detect_pkg_manager()
-    if pm == 'apt-get':
+    if pm == "apt-get":
         success, _ = run_command("apt-get install -y nodejs")
-    elif pm in ('dnf', 'yum'):
+    elif pm in ("dnf", "yum"):
         success, _ = run_command(f"{pm} install -y nodejs")
-    elif pm == 'pacman':
+    elif pm == "pacman":
         success, _ = run_command("pacman -S --noconfirm nodejs npm")
     else:
         success, _ = run_command("apt-get install -y nodejs")
@@ -781,7 +867,7 @@ browserLaunch:
   hostname: 'auto'
   port: -1
   avoidLocalhost: false
-port: {config['tavern_port']}
+port: {config["tavern_port"]}
 whitelistMode: false
 basicAuthMode: false
 enableUserAccounts: true
@@ -873,15 +959,19 @@ def deploy_astrbot():
     install_status["current_stage"] = "docker_pull"
     pull_ok, _ = run_command_stream(
         "docker compose -f astrbot.yml pull",
-        cwd=astrbot_dir, generation=install_generation
+        cwd=astrbot_dir,
+        generation=install_generation,
     )
     if not pull_ok:
         pull_ok, _ = run_command_stream(
             "docker-compose -f astrbot.yml pull",
-            cwd=astrbot_dir, generation=install_generation
+            cwd=astrbot_dir,
+            generation=install_generation,
         )
     if not pull_ok:
-        log("❌ Docker镜像拉取失败。可能原因：网络连接不稳定或镜像源不可用。建议操作：点击安装页面的‘镜像加速’按钮更换加速源后重试")
+        log(
+            "❌ Docker镜像拉取失败。可能原因：网络连接不稳定或镜像源不可用。建议操作：点击安装页面的‘镜像加速’按钮更换加速源后重试"
+        )
         return False
     # 启动容器
     log("启动Docker容器...")
@@ -913,17 +1003,19 @@ def deploy_sillytavern():
             clone_url = "https://github.com/SillyTavern/SillyTavern.git"
         success, _ = run_command_stream(
             f"git clone --depth 1 --progress {clone_url} {tavern_dir}",
-            generation=install_generation
+            generation=install_generation,
         )
         if not success and git_proxy:
             log("代理克隆失败，尝试直接连接 GitHub...")
             run_command(f"rm -rf {tavern_dir}")
             success, _ = run_command_stream(
                 f"git clone --depth 1 --progress https://github.com/SillyTavern/SillyTavern.git {tavern_dir}",
-                generation=install_generation
+                generation=install_generation,
             )
         if not success:
-            log("❌ SillyTavern 仓库克隆失败。可能原因：服务器无法访问 GitHub。建议操作：点击‘镜像加速’添加 Git 代理后重试")
+            log(
+                "❌ SillyTavern 仓库克隆失败。可能原因：服务器无法访问 GitHub。建议操作：点击‘镜像加速’添加 Git 代理后重试"
+            )
             return False
     # 再次验证克隆是否成功（防止 git 返回成功但目录为空的情况）
     if not os.path.exists(package_json):
@@ -944,18 +1036,24 @@ def deploy_sillytavern():
             log(f"npm install 重试第 {attempt} 次...")
             run_command("rm -rf node_modules", cwd=tavern_dir)
             run_command("npm cache clean --force", cwd=tavern_dir)
-        success, output = run_command_stream(npm_cmd, cwd=tavern_dir, generation=install_generation, timeout=900)
+        success, output = run_command_stream(
+            npm_cmd, cwd=tavern_dir, generation=install_generation, timeout=900
+        )
         # 即使返回码非0，也检查 node_modules 是否实际存在
         node_modules = os.path.join(tavern_dir, "node_modules")
         if success:
             install_success = True
             break
         elif os.path.exists(node_modules) and len(os.listdir(node_modules)) > 10:
-            log("npm 返回码非0，但 node_modules 已存在（可能是 warning 导致），视为成功")
+            log(
+                "npm 返回码非0，但 node_modules 已存在（可能是 warning 导致），视为成功"
+            )
             install_success = True
             break
     if not install_success:
-        log("❌ npm依赖安装失败（已重试3次）。可能原因：网络不稳定或 npm 源不可用。建议操作：点击‘镜像加速’设置 npm 镜像源后重试")
+        log(
+            "❌ npm依赖安装失败（已重试3次）。可能原因：网络不稳定或 npm 源不可用。建议操作：点击‘镜像加速’设置 npm 镜像源后重试"
+        )
         return False
     log("配置SillyTavern...")
     config_content = generate_tavern_config_yaml()
@@ -967,7 +1065,7 @@ def deploy_sillytavern():
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
         'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
-        cwd=tavern_dir
+        cwd=tavern_dir,
     )
     if success:
         run_command("pm2 save", quiet=True)
@@ -976,7 +1074,9 @@ def deploy_sillytavern():
         if startup_ok:
             log("PM2 开机自启已配置")
         else:
-            log("PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）")
+            log(
+                "PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）"
+            )
         time.sleep(5)  # 等待 SillyTavern 初始化存储
         alive, status_output = run_command("pm2 show sillytavern")
         if alive and "online" in status_output.lower():
@@ -1010,7 +1110,10 @@ def set_sillytavern_password(tavern_dir):
             try:
                 with open(f, "r", encoding="utf-8") as fp:
                     data = json.load(fp)
-                    if isinstance(data.get("key"), str) and "default-user" in data["key"]:
+                    if (
+                        isinstance(data.get("key"), str)
+                        and "default-user" in data["key"]
+                    ):
                         target_file = f
                         break
             except:
@@ -1023,9 +1126,7 @@ def set_sillytavern_password(tavern_dir):
     # 生成 salt 和 hash（与 SillyTavern 的 crypto.scrypt 兼容，使用 hex 编码）
     salt = os.urandom(16).hex()
     password_hash = hashlib.scrypt(
-        password.encode('utf-8'),
-        salt=salt.encode('utf-8'),
-        n=16384, r=8, p=1, dklen=64
+        password.encode("utf-8"), salt=salt.encode("utf-8"), n=16384, r=8, p=1, dklen=64
     )
     password_hash_hex = password_hash.hex()
 
@@ -1054,8 +1155,8 @@ def set_sillytavern_password(tavern_dir):
                     "admin": True,
                     "enabled": True,
                     "avatar": None,
-                    "block": []
-                }
+                    "block": [],
+                },
             }
 
         with open(target_file, "w", encoding="utf-8") as fp:
@@ -1089,8 +1190,7 @@ def install_astrbot_plugins(selected_plugins):
                 continue
             log(f"安装插件: {plugin['name']}")
             success, _ = run_command(
-                f"git clone {plugin['repo']} {plugin_name}",
-                cwd=plugins_dir
+                f"git clone {plugin['repo']} {plugin_name}", cwd=plugins_dir
             )
             if not success:
                 log(f"插件安装失败: {plugin['name']}")
@@ -1171,7 +1271,8 @@ def do_install(generation):
         log("===== DNS 健康检查 =====")
         check_and_fix_dns()
 
-        if cancelled(): return
+        if cancelled():
+            return
 
         # ========== 阶段2：安装缺失依赖 ==========
         install_status["progress"] = 5
@@ -1194,34 +1295,44 @@ def do_install(generation):
         else:
             log("所有依赖已就绪，跳过安装")
 
-        if cancelled(): return
+        if cancelled():
+            return
 
         if need_docker and not has_docker:
             install_status["progress"] = 8
             install_status["message"] = "安装 Docker..."
             install_status["current_stage"] = "dep_docker"
             if not install_docker():
-                raise Exception("Docker安装失败。可能原因：网络无法访问 Docker 官方服务器。请检查服务器网络连接")
+                raise Exception(
+                    "Docker安装失败。可能原因：网络无法访问 Docker 官方服务器。请检查服务器网络连接"
+                )
 
-        if cancelled(): return
+        if cancelled():
+            return
 
         if need_tavern and not has_nodejs:
             install_status["progress"] = 15
             install_status["message"] = "安装 Node.js..."
             install_status["current_stage"] = "dep_nodejs"
             if not install_nodejs():
-                raise Exception("Node.js安装失败。可能原因：网络无法访问 NodeSource 服务器。请检查网络连接")
+                raise Exception(
+                    "Node.js安装失败。可能原因：网络无法访问 NodeSource 服务器。请检查网络连接"
+                )
 
-        if cancelled(): return
+        if cancelled():
+            return
 
         if need_tavern and not has_pm2:
             install_status["progress"] = 20
             install_status["message"] = "安装 PM2..."
             install_status["current_stage"] = "dep_pm2"
             if not install_pm2():
-                raise Exception("PM2安装失败。可能原因：NPM 无法访问。建议设置 npm 镜像加速后重试")
+                raise Exception(
+                    "PM2安装失败。可能原因：NPM 无法访问。建议设置 npm 镜像加速后重试"
+                )
 
-        if cancelled(): return
+        if cancelled():
+            return
 
         # ========== 阶段3：按顺序部署服务 ==========
         log("===== 阶段3：部署服务 =====")
@@ -1231,7 +1342,9 @@ def do_install(generation):
             install_status["progress"] = 25
             install_status["message"] = "部署 AstrBot + NapCat..."
             if not deploy_astrbot():
-                raise Exception("AstrBot部署失败。可能原因：Docker镜像拉取或容器启动失败。建议更换 Docker 镜像源后重试")
+                raise Exception(
+                    "AstrBot部署失败。可能原因：Docker镜像拉取或容器启动失败。建议更换 Docker 镜像源后重试"
+                )
 
             # 等待 NapCat 容器初始化完成后获取 token
             install_status["progress"] = 55
@@ -1244,7 +1357,9 @@ def do_install(generation):
                     log(f"NapCat WebUI Token: {napcat_token}")
                     break
             if not napcat_token:
-                log("未能自动获取NapCat Token，请手动查看: cat /opt/astrbot/napcat/config/webui.json")
+                log(
+                    "未能自动获取NapCat Token，请手动查看: cat /opt/astrbot/napcat/config/webui.json"
+                )
             config["napcat_token"] = napcat_token
 
             if config.get("install_plugins", False):
@@ -1254,17 +1369,21 @@ def do_install(generation):
         else:
             log("跳过 AstrBot 安装")
 
-        if cancelled(): return
+        if cancelled():
+            return
 
         if need_tavern:
             install_status["progress"] = 65
             install_status["message"] = "部署 SillyTavern..."
             if not deploy_sillytavern():
-                raise Exception("SillyTavern部署失败。可能原因：GitHub克隆或npm依赖安装失败。建议设置镜像加速后重试")
+                raise Exception(
+                    "SillyTavern部署失败。可能原因：GitHub克隆或npm依赖安装失败。建议设置镜像加速后重试"
+                )
         else:
             log("跳过 SillyTavern 安装")
 
-        if cancelled(): return
+        if cancelled():
+            return
 
         install_status["progress"] = 92
         install_status["message"] = "配置防火墙..."
@@ -1295,7 +1414,9 @@ def do_install(generation):
         # 构造 NapCat URL（带 token 参数可直接登录）
         napcat_base = f"http://{server_ip}:{config['napcat_port']}"
         napcat_token = config.get("napcat_token", "")
-        napcat_url = f"{napcat_base}/webui?token={napcat_token}" if napcat_token else napcat_base
+        napcat_url = (
+            f"{napcat_base}/webui?token={napcat_token}" if napcat_token else napcat_base
+        )
 
         install_status["results"] = {
             "server_ip": server_ip,
@@ -1304,14 +1425,16 @@ def do_install(generation):
             "astrbot_url": f"http://{server_ip}:{config['astrbot_port']}",
             "tavern_url": f"http://{server_ip}:{config['tavern_port']}",
             "tavern_username": config.get("tavern_username", "admin"),
-            "tavern_password": config.get("tavern_password", "")
+            "tavern_password": config.get("tavern_password", ""),
         }
 
         # 将夜鹭机管理面板自身注册为 PM2 常驻服务
         install_status["progress"] = 98
         install_status["message"] = "注册常驻服务..."
         log("注册夜鹭机管理面板为常驻服务...")
-        already_in_pm2, _ = run_command("pm2 describe yolushiki 2>/dev/null", quiet=True)
+        already_in_pm2, _ = run_command(
+            "pm2 describe yolushiki 2>/dev/null", quiet=True
+        )
         if already_in_pm2:
             log("夜鹭机已在 PM2 中运行，跳过重新注册")
             run_command("pm2 save", quiet=True)
@@ -1320,7 +1443,7 @@ def do_install(generation):
             if os.path.exists(yolushiki_app):
                 run_command(
                     f'pm2 start {yolushiki_app} --name "yolushiki" --interpreter python3 -- --port 9999 --host 0.0.0.0',
-                    quiet=True
+                    quiet=True,
                 )
                 run_command("pm2 save", quiet=True)
         # 确保 PM2 开机自启（无论是否安装了酒馆）
@@ -1328,7 +1451,9 @@ def do_install(generation):
         if startup_ok:
             log("PM2 开机自启已配置")
         else:
-            log("PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）")
+            log(
+                "PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）"
+            )
 
         install_status["progress"] = 100
         install_status["message"] = "安装完成！"
@@ -1343,6 +1468,7 @@ def do_install(generation):
 
 # ========== 路由：认证 ==========
 
+
 @app.route("/login")
 def login_page():
     """登录页面"""
@@ -1353,11 +1479,13 @@ def login_page():
 @app.route("/api/auth/check")
 def auth_check():
     """检查认证状态"""
-    return jsonify({
-        "token_set": bool(config.get("token")),
-        "authenticated": bool(session.get("authenticated")),
-        "installed": bool(config.get("installed"))
-    })
+    return jsonify(
+        {
+            "token_set": bool(config.get("token")),
+            "authenticated": bool(session.get("authenticated")),
+            "installed": bool(config.get("installed")),
+        }
+    )
 
 
 @app.route("/api/auth/setup", methods=["POST"])
@@ -1376,10 +1504,7 @@ def auth_setup():
     save_config()
     session["authenticated"] = True
     session.permanent = True
-    return jsonify({
-        "success": True,
-        "message": f"Token已保存至 {CONFIG_FILE}"
-    })
+    return jsonify({"success": True, "message": f"Token已保存至 {CONFIG_FILE}"})
 
 
 @app.route("/api/auth/login", methods=["POST"])
@@ -1390,7 +1515,11 @@ def auth_login():
     if not token:
         return jsonify({"error": "请输入Token"}), 400
     if token != config.get("token"):
-        return jsonify({"error": "Token错误。如果忘记了Token，请在服务器终端运行：cat /opt/yolushiki/config.json"}), 401
+        return jsonify(
+            {
+                "error": "Token错误。如果忘记了Token，请在服务器终端运行：cat /opt/yolushiki/config.json"
+            }
+        ), 401
     session["authenticated"] = True
     session.permanent = True
     return jsonify({"success": True})
@@ -1408,9 +1537,11 @@ def auth_logout():
 def system_shutdown():
     """关闭夜鹭机管理面板（独立于logout）"""
     session.clear()
+
     def shutdown_server():
         time.sleep(1)
         os._exit(0)
+
     threading.Thread(target=shutdown_server, daemon=True).start()
     return jsonify({"success": True})
 
@@ -1431,8 +1562,14 @@ def system_uninstall():
             yml = "/opt/astrbot/astrbot.yml"
             if os.path.exists(yml):
                 cmds = [
-                    (f"docker compose -f {yml} down --timeout 30", "停止 AstrBot/NapCat 容器"),
-                    (f"docker-compose -f {yml} down --timeout 30", "停止容器(兼容命令)"),
+                    (
+                        f"docker compose -f {yml} down --timeout 30",
+                        "停止 AstrBot/NapCat 容器",
+                    ),
+                    (
+                        f"docker-compose -f {yml} down --timeout 30",
+                        "停止容器(兼容命令)",
+                    ),
                 ]
                 for cmd, desc in cmds:
                     ok, out = run_command(cmd, quiet=True)
@@ -1444,7 +1581,13 @@ def system_uninstall():
             else:
                 results.append("⚠ astrbot.yml 不存在，跳过容器停止")
         if remove_images:
-            for img in ["mlikiowa/napcat-docker", "soulter/astrbot", "m.daocloud.io/docker.io/soulter/astrbot", "docker.io/soulter/astrbot", "docker.io/mlikiowa/napcat-docker"]:
+            for img in [
+                "mlikiowa/napcat-docker",
+                "soulter/astrbot",
+                "m.daocloud.io/docker.io/soulter/astrbot",
+                "docker.io/soulter/astrbot",
+                "docker.io/mlikiowa/napcat-docker",
+            ]:
                 run_command(f"docker rmi {img} 2>/dev/null", quiet=True)
             results.append("✓ 已删除相关 Docker 镜像")
         if remove_data:
@@ -1461,7 +1604,9 @@ def system_uninstall():
         if remove_dependencies:
             run_command("npm uninstall -g pm2 2>/dev/null", quiet=True)
             results.append("✓ 已卸载 PM2")
-            results.append("⚠ Docker 和 Node.js 未自动卸载（可能被其他服务使用），如需卸载请手动操作")
+            results.append(
+                "⚠ Docker 和 Node.js 未自动卸载（可能被其他服务使用），如需卸载请手动操作"
+            )
         config["installed"] = False
         save_config()
         results.append("✓ 安装状态已重置，刷新页面可重新安装")
@@ -1492,6 +1637,7 @@ def auth_change_token():
 
 # ========== 路由：页面 ==========
 
+
 @app.route("/")
 @login_required
 def index():
@@ -1503,12 +1649,11 @@ def index():
         "napcat_port": config.get("napcat_port", 6099),
         "tavern_port": config.get("tavern_port", 18888),
         "server_ip": config.get("server_ip", ""),
-        "install_plugins": config.get("install_plugins", True)
+        "install_plugins": config.get("install_plugins", True),
     }
-    return render_template("index.html",
-                           plugins=ASTRBOT_PLUGINS,
-                           config=safe_config,
-                           version=VERSION)
+    return render_template(
+        "index.html", plugins=ASTRBOT_PLUGINS, config=safe_config, version=VERSION
+    )
 
 
 @app.route("/tutorial/<name>")
@@ -1518,11 +1663,13 @@ def tutorial(name):
     templates = ["napcat", "astrbot", "tavern", "server"]
     if name not in templates:
         return redirect(url_for("index"))
-    return render_template(f"tutorial_{name}.html",
-                           server_ip=config.get("server_ip", "你的服务器IP"),
-                           napcat_port=config.get("napcat_port", 6099),
-                           astrbot_port=config.get("astrbot_port", 6185),
-                           tavern_port=config.get("tavern_port", 18888))
+    return render_template(
+        f"tutorial_{name}.html",
+        server_ip=config.get("server_ip", "你的服务器IP"),
+        napcat_port=config.get("napcat_port", 6099),
+        astrbot_port=config.get("astrbot_port", 6185),
+        tavern_port=config.get("tavern_port", 18888),
+    )
 
 
 @app.route("/encyclopedia")
@@ -1533,6 +1680,7 @@ def encyclopedia():
 
 
 # ========== 路由：服务管理 API ==========
+
 
 @app.route("/api/services/status")
 @login_required
@@ -1569,6 +1717,7 @@ def api_service_logs(name):
 
 # ========== 路由：NapCat Token ==========
 
+
 @app.route("/api/napcat/token")
 @login_required
 def api_napcat_token():
@@ -1582,15 +1731,20 @@ def api_napcat_token():
     server_ip = config.get("server_ip", "")
     napcat_port = config.get("napcat_port", 6099)
     napcat_base = f"http://{server_ip}:{napcat_port}" if server_ip else ""
-    napcat_url = f"{napcat_base}/webui?token={token}" if token and napcat_base else napcat_base
-    return jsonify({
-        "token": token,
-        "url": napcat_url,
-        "config_path": "/opt/astrbot/napcat/config/webui.json"
-    })
+    napcat_url = (
+        f"{napcat_base}/webui?token={token}" if token and napcat_base else napcat_base
+    )
+    return jsonify(
+        {
+            "token": token,
+            "url": napcat_url,
+            "config_path": "/opt/astrbot/napcat/config/webui.json",
+        }
+    )
 
 
 # ========== 路由：服务安装状态检测 ==========
+
 
 def check_service_installed(name):
     """检测服务是否已安装"""
@@ -1601,11 +1755,15 @@ def check_service_installed(name):
         return os.path.exists(package_json)
     elif name == "astrbot":
         # 检查 AstrBot 容器是否存在
-        ok, output = run_command("docker ps -a --format '{{.Names}}' | grep -w astrbot", quiet=True)
+        ok, output = run_command(
+            "docker ps -a --format '{{.Names}}' | grep -w astrbot", quiet=True
+        )
         return ok and "astrbot" in output
     elif name == "napcat":
         # 检查 NapCat 容器是否存在
-        ok, output = run_command("docker ps -a --format '{{.Names}}' | grep -w napcat", quiet=True)
+        ok, output = run_command(
+            "docker ps -a --format '{{.Names}}' | grep -w napcat", quiet=True
+        )
         return ok and "napcat" in output
     return False
 
@@ -1614,11 +1772,13 @@ def check_service_installed(name):
 @login_required
 def api_services_installed():
     """检测各服务安装状态"""
-    return jsonify({
-        "napcat": check_service_installed("napcat"),
-        "astrbot": check_service_installed("astrbot"),
-        "sillytavern": check_service_installed("sillytavern")
-    })
+    return jsonify(
+        {
+            "napcat": check_service_installed("napcat"),
+            "astrbot": check_service_installed("astrbot"),
+            "sillytavern": check_service_installed("sillytavern"),
+        }
+    )
 
 
 @app.route("/api/services/<name>/reinstall", methods=["POST"])
@@ -1638,7 +1798,7 @@ def api_service_reinstall(name):
         "message": f"重装 {name}...",
         "logs": [],
         "results": {},
-        "current_stage": ""
+        "current_stage": "",
     }
     # 在主线程中捕获请求数据（线程内无法访问 Flask request 上下文）
     reinstall_data = request.json or {}
@@ -1709,6 +1869,7 @@ def api_service_reinstall(name):
 
 # ========== 路由：系统信息 ==========
 
+
 @app.route("/api/system/info")
 @login_required
 def api_system_info():
@@ -1727,18 +1888,20 @@ def api_refresh_ip():
     _sysinfo_cache = {"data": None, "time": 0}
     new_ip = fetch_public_ip()
     if new_ip:
-        return jsonify({
-            "success": True, "ip": new_ip,
-            "message": f"公网IP已更新: {new_ip}"
-        })
+        return jsonify(
+            {"success": True, "ip": new_ip, "message": f"公网IP已更新: {new_ip}"}
+        )
     else:
         # 获取失败，恢复旧值避免丢失
         if old_ip and old_ip != "你的服务器IP":
             config["server_ip"] = old_ip
-        return jsonify({
-            "success": False, "ip": old_ip,
-            "message": "无法获取公网IP，请检查服务器网络连接"
-        }), 500
+        return jsonify(
+            {
+                "success": False,
+                "ip": old_ip,
+                "message": "无法获取公网IP，请检查服务器网络连接",
+            }
+        ), 500
 
 
 @app.route("/api/system/resources")
@@ -1758,6 +1921,7 @@ def api_system_resources():
 
 # ========== 路由：错误报告 ==========
 
+
 @app.route("/api/system/error-report")
 @login_required
 def api_error_report():
@@ -1772,14 +1936,19 @@ def api_error_report():
     report["kernel"] = kernel.strip() if ok else "未知"
     ok, mem = run_command("free -h | grep Mem | awk '{print $2}'", quiet=True)
     report["total_memory"] = mem.strip() if ok else "未知"
-    ok, disk = run_command("df -h / | tail -1 | awk '{print $2, $3, $4, $5}'", quiet=True)
+    ok, disk = run_command(
+        "df -h / | tail -1 | awk '{print $2, $3, $4, $5}'", quiet=True
+    )
     report["disk"] = disk.strip() if ok else "未知"
 
     # 2. 服务器 IP 属地
     server_ip = config.get("server_ip", "")
     report["server_ip"] = server_ip
     if server_ip and server_ip != "你的服务器IP":
-        ok, region = run_command(f"curl -s --connect-timeout 3 'http://ip-api.com/json/{server_ip}?fields=country,regionName,city,isp&lang=zh-CN'", quiet=True)
+        ok, region = run_command(
+            f"curl -s --connect-timeout 3 'http://ip-api.com/json/{server_ip}?fields=country,regionName,city,isp&lang=zh-CN'",
+            quiet=True,
+        )
         report["ip_region"] = region.strip() if ok else "查询失败"
     else:
         report["ip_region"] = "未获取到IP"
@@ -1804,14 +1973,20 @@ def api_error_report():
     for name, info in services_status.items():
         svc_report[name] = {
             "status": info.get("status", "unknown"),
-            "memory_mb": round(info.get("memory", 0) / 1024 / 1024, 1) if info.get("memory", 0) > 0 else 0
+            "memory_mb": round(info.get("memory", 0) / 1024 / 1024, 1)
+            if info.get("memory", 0) > 0
+            else 0,
         }
     # 检查关键目录/文件是否存在
     svc_report["astrbot_dir_exists"] = os.path.exists("/opt/astrbot")
     svc_report["astrbot_yml_exists"] = os.path.exists("/opt/astrbot/astrbot.yml")
     svc_report["sillytavern_dir_exists"] = os.path.exists("/opt/sillytavern")
-    svc_report["sillytavern_package_json"] = os.path.exists("/opt/sillytavern/package.json")
-    svc_report["sillytavern_node_modules"] = os.path.exists("/opt/sillytavern/node_modules")
+    svc_report["sillytavern_package_json"] = os.path.exists(
+        "/opt/sillytavern/package.json"
+    )
+    svc_report["sillytavern_node_modules"] = os.path.exists(
+        "/opt/sillytavern/node_modules"
+    )
     report["services"] = svc_report
 
     # 5. 安装进度和日志
@@ -1850,7 +2025,7 @@ def api_error_report():
                 "exists": True,
                 "host": wdata.get("host", ""),
                 "port": wdata.get("port", ""),
-                "has_token": bool(wdata.get("token", ""))
+                "has_token": bool(wdata.get("token", "")),
             }
         except:
             report["napcat_webui"] = {"exists": True, "parse_error": True}
@@ -1882,6 +2057,7 @@ def api_error_report():
 
 # ========== 路由：安装 API（保留） ==========
 
+
 @app.route("/api/status")
 @login_required
 def get_install_status():
@@ -1910,7 +2086,7 @@ def get_plugins():
 def set_docker_mirror():
     """配置 Docker 镜像加速"""
     data = request.json or {}
-    mirror = data.get("mirror", "1panel")
+    mirror = data.get("mirror", "xuanyuan")
     daemon_json = "/etc/docker/daemon.json"
     try:
         if mirror == "direct":
@@ -1920,13 +2096,15 @@ def set_docker_mirror():
             run_command("systemctl daemon-reload", quiet=True)
             run_command("systemctl restart docker", quiet=True)
             time.sleep(3)  # 等待 Docker 完全重启
-            return jsonify({"success": True, "message": "已切换为直连 Docker Hub（无镜像加速）"})
+            return jsonify(
+                {"success": True, "message": "已切换为直连 Docker Hub（无镜像加速）"}
+            )
         mirrors_map = {
-            "1panel": ["https://docker.1panel.live"],
+            "xuanyuan": ["https://docker.xuanyuan.me"],
             "daocloud": ["https://docker.m.daocloud.io"],
-            "aliyun": ["https://docker.mirrors.ustc.edu.cn", "https://hub-mirror.c.163.com"]
+            "1ms": ["https://docker.1ms.run"],
         }
-        mirrors = mirrors_map.get(mirror, mirrors_map["1panel"])
+        mirrors = mirrors_map.get(mirror, mirrors_map["xuanyuan"])
         mirror_config = json.dumps({"registry-mirrors": mirrors}, indent=2)
         with open(daemon_json, "w") as f:
             f.write(mirror_config)
@@ -1949,8 +2127,8 @@ def set_mirrors():
     if mirror_type == "npm":
         npm_map = {
             "taobao": "https://registry.npmmirror.com",
-            "tencent": "https://mirrors.cloud.tencent.com/npm/",
-            "direct": ""
+            "tencent": "https://mirrors.tencent.com/npm/",
+            "direct": "",
         }
         runtime_mirrors["npm_registry"] = npm_map.get(mirror_value, mirror_value)
         msg = f"npm 源已切换为: {runtime_mirrors['npm_registry'] or '官方源'}"
@@ -1960,7 +2138,7 @@ def set_mirrors():
         git_map = {
             "ghproxy": "https://gh.llkk.cc/",
             "gitclone": "https://gitclone.com/github.com/",
-            "direct": ""
+            "direct": "",
         }
         runtime_mirrors["git_proxy"] = git_map.get(mirror_value, mirror_value)
         msg = f"Git 代理已切换为: {runtime_mirrors['git_proxy'] or '直连 GitHub'}"
@@ -1984,11 +2162,11 @@ def set_docker_mirror_internal(mirror):
             time.sleep(3)
             return jsonify({"success": True, "message": "已切换为直连 Docker Hub"})
         mirrors_map = {
-            "1panel": ["https://docker.1panel.live"],
+            "xuanyuan": ["https://docker.xuanyuan.me"],
             "daocloud": ["https://docker.m.daocloud.io"],
-            "aliyun": ["https://docker.mirrors.ustc.edu.cn", "https://hub-mirror.c.163.com"]
+            "1ms": ["https://docker.1ms.run"],
         }
-        mirrors = mirrors_map.get(mirror, mirrors_map["1panel"])
+        mirrors = mirrors_map.get(mirror, mirrors_map["xuanyuan"])
         mirror_config = json.dumps({"registry-mirrors": mirrors}, indent=2)
         with open(daemon_json, "w") as f:
             f.write(mirror_config)
@@ -2015,7 +2193,9 @@ def retry_current_stage():
     old_logs = list(install_status.get("logs", []))
     install_status["stage"] = "installing"
     install_status["logs"] = old_logs
-    install_status["logs"].append(f"[{time.strftime('%H:%M:%S')}] === 重试阶段: {current_stage} ===")
+    install_status["logs"].append(
+        f"[{time.strftime('%H:%M:%S')}] === 重试阶段: {current_stage} ==="
+    )
 
     def do_retry():
         global install_status
@@ -2026,21 +2206,27 @@ def retry_current_stage():
                 astrbot_dir = "/opt/astrbot"
                 pull_ok, _ = run_command_stream(
                     "docker compose -f astrbot.yml pull",
-                    cwd=astrbot_dir, generation=current_gen
+                    cwd=astrbot_dir,
+                    generation=current_gen,
                 )
                 if not pull_ok:
                     pull_ok, _ = run_command_stream(
                         "docker-compose -f astrbot.yml pull",
-                        cwd=astrbot_dir, generation=current_gen
+                        cwd=astrbot_dir,
+                        generation=current_gen,
                     )
                 if not pull_ok:
                     raise Exception("Docker镜像拉取失败")
                 # 继续完成后续步骤
                 log("镜像拉取成功，继续启动容器...")
                 install_status["message"] = "启动 Docker 容器..."
-                success, _ = run_command("docker compose -f astrbot.yml up -d", cwd=astrbot_dir)
+                success, _ = run_command(
+                    "docker compose -f astrbot.yml up -d", cwd=astrbot_dir
+                )
                 if not success:
-                    success, _ = run_command("docker-compose -f astrbot.yml up -d", cwd=astrbot_dir)
+                    success, _ = run_command(
+                        "docker-compose -f astrbot.yml up -d", cwd=astrbot_dir
+                    )
                 if not success:
                     raise Exception("Docker容器启动失败")
                 # 继续剩余安装流程
@@ -2078,13 +2264,21 @@ def retry_current_stage():
                 run_command("npm cache clean --force", cwd=tavern_dir)
                 npm_registry = runtime_mirrors.get("npm_registry", "")
                 if npm_registry:
-                    npm_cmd = f"npm install --no-audit --no-fund --registry={npm_registry}"
+                    npm_cmd = (
+                        f"npm install --no-audit --no-fund --registry={npm_registry}"
+                    )
                     log(f"使用npm镜像: {npm_registry}")
                 else:
                     npm_cmd = "npm install --no-audit --no-fund"
-                success, _ = run_command_stream(npm_cmd, cwd=tavern_dir, generation=current_gen, timeout=900)
+                success, _ = run_command_stream(
+                    npm_cmd, cwd=tavern_dir, generation=current_gen, timeout=900
+                )
                 node_modules = os.path.join(tavern_dir, "node_modules")
-                if not success and os.path.exists(node_modules) and len(os.listdir(node_modules)) > 10:
+                if (
+                    not success
+                    and os.path.exists(node_modules)
+                    and len(os.listdir(node_modules)) > 10
+                ):
                     log("npm 返回码非0，但 node_modules 已存在，视为成功")
                     success = True
                 if not success:
@@ -2117,7 +2311,7 @@ def _continue_sillytavern_config(tavern_dir):
     run_command("pm2 delete sillytavern 2>/dev/null || true")
     success, _ = run_command(
         'pm2 start server.js --name "sillytavern" --max-memory-restart 300M',
-        cwd=tavern_dir
+        cwd=tavern_dir,
     )
     if success:
         run_command("pm2 save", quiet=True)
@@ -2125,7 +2319,9 @@ def _continue_sillytavern_config(tavern_dir):
         if startup_ok:
             log("PM2 开机自启已配置")
         else:
-            log("PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）")
+            log(
+                "PM2 开机自启配置可能未成功（非root用户请手动执行 pm2 startup 输出的命令）"
+            )
         time.sleep(5)
         alive, status_output = run_command("pm2 show sillytavern")
         if alive and "online" in status_output.lower():
@@ -2176,7 +2372,10 @@ def _finish_install(generation):
     install_status["progress"] = 95
     install_status["message"] = "保存配置..."
     server_ip = ""
-    ok, ip_out = run_command("curl -s --connect-timeout 3 ifconfig.me || curl -s --connect-timeout 3 ip.sb", quiet=True)
+    ok, ip_out = run_command(
+        "curl -s --connect-timeout 3 ifconfig.me || curl -s --connect-timeout 3 ip.sb",
+        quiet=True,
+    )
     if ok and ip_out.strip():
         server_ip = ip_out.strip()
     if not server_ip:
@@ -2190,7 +2389,9 @@ def _finish_install(generation):
     save_config()
     napcat_base = f"http://{server_ip}:{config['napcat_port']}"
     napcat_token = config.get("napcat_token", "")
-    napcat_url = f"{napcat_base}/webui?token={napcat_token}" if napcat_token else napcat_base
+    napcat_url = (
+        f"{napcat_base}/webui?token={napcat_token}" if napcat_token else napcat_base
+    )
     install_status["results"] = {
         "server_ip": server_ip,
         "napcat_url": napcat_url,
@@ -2198,7 +2399,7 @@ def _finish_install(generation):
         "astrbot_url": f"http://{server_ip}:{config['astrbot_port']}",
         "tavern_url": f"http://{server_ip}:{config['tavern_port']}",
         "tavern_username": config.get("tavern_username", "admin"),
-        "tavern_password": config.get("tavern_password", "")
+        "tavern_password": config.get("tavern_password", ""),
     }
     install_status["progress"] = 98
     install_status["message"] = "注册常驻服务..."
@@ -2212,7 +2413,7 @@ def _finish_install(generation):
         if os.path.exists(yolushiki_app):
             run_command(
                 f'pm2 start {yolushiki_app} --name "yolushiki" --interpreter python3 -- --port 9999 --host 0.0.0.0',
-                quiet=True
+                quiet=True,
             )
             run_command("pm2 save", quiet=True)
     # 确保 PM2 开机自启（无论是否安装了酒馆，此处是所有安装路径的必经之处）
@@ -2242,7 +2443,7 @@ def start_install():
         "message": "开始安装...",
         "logs": [],
         "results": {},
-        "current_stage": ""
+        "current_stage": "",
     }
     data = request.json or {}
     config["install_tavern"] = data.get("install_tavern", True)
@@ -2278,16 +2479,23 @@ DEFAULT_PATHS = {
 
 # 路径探测：常见安装位置 + Docker inspect + find
 TAVERN_SEARCH_DIRS = [
-    "/opt/sillytavern", "/root/SillyTavern", "/home/*/SillyTavern",
-    "/srv/sillytavern", "/opt/SillyTavern",
+    "/opt/sillytavern",
+    "/root/SillyTavern",
+    "/home/*/SillyTavern",
+    "/srv/sillytavern",
+    "/opt/SillyTavern",
 ]
 ASTRBOT_SEARCH_DIRS = [
-    "/opt/astrbot/data", "/root/astrbot/data", "/home/*/astrbot/data",
+    "/opt/astrbot/data",
+    "/root/astrbot/data",
+    "/home/*/astrbot/data",
     "/srv/astrbot/data",
 ]
 NAPCAT_SEARCH_DIRS = [
-    "/opt/astrbot/napcat/config", "/opt/napcat/config",
-    "/root/napcat/config", "/home/*/napcat/config",
+    "/opt/astrbot/napcat/config",
+    "/opt/napcat/config",
+    "/root/napcat/config",
+    "/home/*/napcat/config",
 ]
 
 
@@ -2337,9 +2545,15 @@ def _detect_service_paths():
     if "astrbot_path" not in result:
         try:
             out = subprocess.check_output(
-                ["docker", "inspect", "astrbot", "--format",
-                 "{{range .Mounts}}{{.Source}}:{{.Destination}}\n{{end}}"],
-                timeout=5, stderr=subprocess.DEVNULL
+                [
+                    "docker",
+                    "inspect",
+                    "astrbot",
+                    "--format",
+                    "{{range .Mounts}}{{.Source}}:{{.Destination}}\n{{end}}",
+                ],
+                timeout=5,
+                stderr=subprocess.DEVNULL,
             ).decode()
             for line in out.strip().split("\n"):
                 if ":" in line:
@@ -2362,9 +2576,15 @@ def _detect_service_paths():
     if "napcat_path" not in result:
         try:
             out = subprocess.check_output(
-                ["docker", "inspect", "napcat", "--format",
-                 "{{range .Mounts}}{{.Source}}:{{.Destination}}\n{{end}}"],
-                timeout=5, stderr=subprocess.DEVNULL
+                [
+                    "docker",
+                    "inspect",
+                    "napcat",
+                    "--format",
+                    "{{range .Mounts}}{{.Source}}:{{.Destination}}\n{{end}}",
+                ],
+                timeout=5,
+                stderr=subprocess.DEVNULL,
             ).decode()
             for line in out.strip().split("\n"):
                 if ":" in line:
@@ -2382,16 +2602,13 @@ def _get_paths(data):
     """从请求数据中获取路径，如果是自定义模式则用自定义路径，否则用默认"""
     paths = {}
     paths["tavern_path"] = (
-        data.get("tavern_path", "").strip()
-        or DEFAULT_PATHS["tavern_path"]
+        data.get("tavern_path", "").strip() or DEFAULT_PATHS["tavern_path"]
     )
     paths["astrbot_path"] = (
-        data.get("astrbot_path", "").strip()
-        or DEFAULT_PATHS["astrbot_path"]
+        data.get("astrbot_path", "").strip() or DEFAULT_PATHS["astrbot_path"]
     )
     paths["napcat_path"] = (
-        data.get("napcat_path", "").strip()
-        or DEFAULT_PATHS["napcat_path"]
+        data.get("napcat_path", "").strip() or DEFAULT_PATHS["napcat_path"]
     )
     return paths
 
@@ -2468,7 +2685,7 @@ def api_migration_export():
             "version": VERSION,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "contents": details,
-            "paths": paths
+            "paths": paths,
         }
         with open(os.path.join(collect_dir, "backup_meta.json"), "w") as f:
             json.dump(meta, f, indent=2, ensure_ascii=False)
@@ -2533,10 +2750,9 @@ def api_migration_import():
             for member in tar.getmembers():
                 member_path = os.path.normpath(member.name)
                 if member_path.startswith("..") or os.path.isabs(member_path):
-                    return jsonify({
-                        "success": False,
-                        "error": "备份文件包含非法路径，已拒绝"
-                    }), 400
+                    return jsonify(
+                        {"success": False, "error": "备份文件包含非法路径，已拒绝"}
+                    ), 400
             tar.extractall(extract_dir)
 
         backup_root = os.path.join(extract_dir, "yolushiki_backup")
@@ -2582,10 +2798,9 @@ def api_migration_import():
         shutil.rmtree(MIGRATION_TMP_DIR, ignore_errors=True)
 
         if not details:
-            return jsonify({
-                "success": False,
-                "error": "备份文件中未找到可恢复的数据"
-            }), 400
+            return jsonify(
+                {"success": False, "error": "备份文件中未找到可恢复的数据"}
+            ), 400
 
         return jsonify({"success": True, "details": details})
     except tarfile.TarError:
@@ -2598,6 +2813,7 @@ def api_migration_import():
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=9999)
     parser.add_argument("--host", default="0.0.0.0")
@@ -2605,6 +2821,7 @@ if __name__ == "__main__":
 
     # 设置 session 有效期 7 天
     from datetime import timedelta
+
     app.permanent_session_lifetime = timedelta(days=7)
 
     print(f"""
