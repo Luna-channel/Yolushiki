@@ -1048,6 +1048,10 @@ def deploy_sillytavern():
     log("部署SillyTavern...")
     tavern_dir = "/opt/sillytavern"
     package_json = os.path.join(tavern_dir, "package.json")
+    # 清理可能残留的 git 锁文件（上次操作被中断导致）
+    git_dir = os.path.join(tavern_dir, ".git")
+    if os.path.isdir(git_dir):
+        run_command(f"find {git_dir} -name '*.lock' -delete", quiet=True)
     # 检查 package.json 是否存在，目录存在但文件不存在说明之前克隆失败
     if os.path.exists(tavern_dir) and not os.path.exists(package_json):
         log("检测到不完整的 SillyTavern 目录，清理后重新克隆...")
