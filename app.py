@@ -744,9 +744,10 @@ def pull_single_image_via_proxy(image, generation=None):
         proxy_image = f"{proxy}/{image}"
         log(f"尝试代理拉取: {proxy_image}")
         install_status["message"] = f"通过 {proxy} 拉取 {image}..."
+        # 用 timeout 命令包裹，防止代理卡死时 stdout 永久阻塞
         ok, _ = run_command_stream(
-            f"docker pull {proxy_image}",
-            timeout=600,
+            f"timeout 300 docker pull {proxy_image}",
+            timeout=360,
             generation=generation,
         )
         if ok:
