@@ -100,7 +100,7 @@ _SYSINFO_CACHE_TTL = 30  # 秒（IP/磁盘/内存不会频繁变化）
 
 # 镜像/加速配置（运行时可切换）
 runtime_mirrors = {
-    "npm_registry": "",  # 空=官方源, 或 https://registry.npmmirror.com
+    "npm_registry": "https://registry.npmmirror.com",  # 默认淘宝镜像，国内服务器访问官方源不稳定
     "git_proxy": "https://edgeone.gh-proxy.com/",  # 默认走代理，国内服务器直连GitHub大概率失败
 }
 
