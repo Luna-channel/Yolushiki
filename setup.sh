@@ -3,7 +3,7 @@
 # 夜鹭机 一键安装引导脚本
 #
 # 使用方法（在服务器终端粘贴这一行）：
-# bash <(curl -fsSL https://raw.githubusercontent.com/Luna-channel/Yolushiki/master/setup.sh)
+# bash <(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/Luna-channel/Yolushiki/master/setup.sh)
 # ============================================================
 
 RED='\033[0;31m'
@@ -92,66 +92,99 @@ echo -e "      ${GREEN}✓${NC}  环境检查完成"
 echo ""
 echo -e "${BLUE}[2/3]${NC} 下载夜鹭机文件..."
 
-# 如果目录已存在，先备份配置再清理
 if [ -d "$INSTALL_DIR" ]; then
-    echo -e "      ${YELLOW}⚠${NC}  检测到已有安装，更新文件..."
-    # 保留 config.json（用户的 Token 配置）
-    if [ -f "$INSTALL_DIR/config.json" ]; then
-        cp "$INSTALL_DIR/config.json" /tmp/yolushiki_config_backup.json
-    fi
-    rm -rf "$INSTALL_DIR"
+    echo -e "      ${YELLOW}⚠${NC}  检测到已有安装，将只更新代码文件（保留配置和用户数据）"
 fi
 
-# 优先用 git clone
+# 下载到临时目录，不直接动安装目录
+TEMP_DL="/tmp/yolushiki_download"
+rm -rf "$TEMP_DL"
+
+# 国内 GitHub 代理列表（自动尝试，哪个通用哪个）
+GH_PROXIES=(
+    "https://ghfast.top/"
+    "https://gh.llkk.cc/"
+    "https://ghproxy.cc/"
+    ""
+)
+
 DOWNLOAD_OK=0
 
-echo -e "      ${CYAN}💡${NC}  正在从 GitHub 下载..."
-if git clone --depth 1 "$REPO_URL.git" "$INSTALL_DIR" > /dev/null 2>&1; then
-    DOWNLOAD_OK=1
-    echo -e "      ${GREEN}✓${NC}  下载完成（git clone）"
-fi
-
-# git 失败时用 curl 下载 tarball
-if [ "$DOWNLOAD_OK" -eq 0 ]; then
-    echo -e "      ${YELLOW}⚠${NC}  git clone 失败，尝试直接下载压缩包..."
-    mkdir -p "$INSTALL_DIR"
-    if curl -fsSL "$REPO_URL/archive/refs/heads/master.tar.gz" -o /tmp/yolushiki.tar.gz; then
-        tar xzf /tmp/yolushiki.tar.gz -C /tmp
-        # GitHub tarball 解压后目录名为 Yolushiki-master
-        if [ -d "/tmp/Yolushiki-master" ]; then
-            cp -r /tmp/Yolushiki-master/* "$INSTALL_DIR/"
-            rm -rf /tmp/Yolushiki-master /tmp/yolushiki.tar.gz
-            DOWNLOAD_OK=1
-            echo -e "      ${GREEN}✓${NC}  下载完成（tarball）"
-        fi
+# 方法1: git clone 到临时目录（依次尝试代理）
+for proxy in "${GH_PROXIES[@]}"; do
+    if [ "$DOWNLOAD_OK" -eq 1 ]; then break; fi
+    clone_url="${proxy}${REPO_URL}.git"
+    if [ -n "$proxy" ]; then
+        echo -e "      ${CYAN}💡${NC}  尝试代理下载: ${proxy}..."
+    else
+        echo -e "      ${CYAN}💡${NC}  尝试直连 GitHub..."
     fi
+    rm -rf "$TEMP_DL" 2>/dev/null
+    if timeout 60 git clone --depth 1 "$clone_url" "$TEMP_DL" > /dev/null 2>&1; then
+        DOWNLOAD_OK=1
+        echo -e "      ${GREEN}✓${NC}  下载完成（git clone）"
+    fi
+done
+
+# 方法2: curl 下载 tarball 到临时目录（依次尝试代理）
+if [ "$DOWNLOAD_OK" -eq 0 ]; then
+    echo -e "      ${YELLOW}⚠${NC}  git clone 全部失败，尝试下载压缩包..."
+    for proxy in "${GH_PROXIES[@]}"; do
+        if [ "$DOWNLOAD_OK" -eq 1 ]; then break; fi
+        tarball_url="${proxy}${REPO_URL}/archive/refs/heads/master.tar.gz"
+        if [ -n "$proxy" ]; then
+            echo -e "      ${CYAN}💡${NC}  尝试代理: ${proxy}..."
+        else
+            echo -e "      ${CYAN}💡${NC}  尝试直连..."
+        fi
+        rm -f /tmp/yolushiki.tar.gz 2>/dev/null
+        if timeout 60 curl -fsSL "$tarball_url" -o /tmp/yolushiki.tar.gz 2>/dev/null; then
+            tar xzf /tmp/yolushiki.tar.gz -C /tmp 2>/dev/null
+            if [ -d "/tmp/Yolushiki-master" ]; then
+                mv /tmp/Yolushiki-master "$TEMP_DL"
+                rm -f /tmp/yolushiki.tar.gz
+                DOWNLOAD_OK=1
+                echo -e "      ${GREEN}✓${NC}  下载完成（tarball）"
+            fi
+        fi
+    done
 fi
 
 # 都失败的话提示用户
 if [ "$DOWNLOAD_OK" -eq 0 ]; then
-    echo -e "${RED}╔═══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║  ❌ 下载失败！                                           ║${NC}"
-    echo -e "${RED}║                                                           ║${NC}"
-    echo -e "${RED}║  可能原因：                                               ║${NC}"
-    echo -e "${RED}║  1. 服务器无法访问 GitHub                                 ║${NC}"
-    echo -e "${RED}║  2. 网络连接不稳定                                        ║${NC}"
-    echo -e "${RED}║                                                           ║${NC}"
-    echo -e "${RED}║  解决方法：                                               ║${NC}"
-    echo -e "${RED}║  手动下载 yolushiki 文件夹上传到 /opt/yolushiki/          ║${NC}"
-    echo -e "${RED}║  然后运行: bash /opt/yolushiki/install.sh                 ║${NC}"
-    echo -e "${RED}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${RED}  ❌ 所有下载方式均失败！${NC}"
+    echo ""
+    echo -e "  ${YELLOW}解决方法：${NC}"
+    echo -e "  1. 在电脑上下载: ${CYAN}${REPO_URL}${NC}"
+    echo -e "  2. 通过1Panel文件管理器上传到 ${CYAN}/opt/yolushiki/${NC}"
+    echo -e "  3. 运行: ${CYAN}bash /opt/yolushiki/install.sh${NC}"
+    echo ""
     exit 1
 fi
 
-# 恢复 config.json
-if [ -f /tmp/yolushiki_config_backup.json ]; then
-    cp /tmp/yolushiki_config_backup.json "$INSTALL_DIR/config.json"
-    rm -f /tmp/yolushiki_config_backup.json
-    echo -e "      ${GREEN}✓${NC}  已恢复之前的 Token 配置"
+# 从临时目录把代码文件同步到安装目录（只覆盖代码，不删除用户数据）
+mkdir -p "$INSTALL_DIR/templates" "$INSTALL_DIR/static"
+
+# 复制核心代码文件
+for f in app.py install.sh setup.sh README.md astrbot.yml; do
+    if [ -f "$TEMP_DL/$f" ]; then
+        cp "$TEMP_DL/$f" "$INSTALL_DIR/$f"
+    fi
+done
+
+# 复制 templates 和 static（覆盖旧版，但不删除用户可能添加的额外文件）
+if [ -d "$TEMP_DL/templates" ]; then
+    cp -r "$TEMP_DL/templates/"* "$INSTALL_DIR/templates/" 2>/dev/null
+fi
+if [ -d "$TEMP_DL/static" ]; then
+    cp -r "$TEMP_DL/static/"* "$INSTALL_DIR/static/" 2>/dev/null
 fi
 
-# 清理 git 元数据（不需要保留 .git 目录）
-rm -rf "$INSTALL_DIR/.git"
+echo -e "      ${GREEN}✓${NC}  代码文件已更新（config.json 等用户数据已保留）"
+
+# 清理临时目录
+rm -rf "$TEMP_DL"
 
 # 验证关键文件
 echo ""

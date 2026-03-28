@@ -18,6 +18,7 @@ import time
 import socket
 import functools
 import hashlib
+import re
 from flask import (
     Flask,
     render_template,
@@ -774,75 +775,78 @@ def pull_all_images_via_proxy(generation=None):
 
 
 def check_and_fix_dns():
-    """检查 DNS 是否正常工作（通过实际连接测试而非 IP 白名单）"""
-    # 测试域名：能解析 + 能连上才算正常
-    test_targets = [
-        ("registry-1.docker.io", 443),
-        ("registry.npmmirror.com", 443),
+    """检查 DNS 解析是否正常（仅测试国内可达的域名，不测试被墙的域名）
+    只在 DNS 解析本身失败时才修复，网络连接失败不算 DNS 问题。
+    """
+    # 只测试国内一定能解析的域名（不包含 Docker Hub 等被墙域名）
+    test_domains = [
+        "registry.npmmirror.com",
+        "mirrors.aliyun.com",
+        "www.baidu.com",
     ]
-    dns_ok = True
-    for domain, port in test_targets:
+    resolve_fail_count = 0
+    for domain in test_domains:
         try:
             ip = socket.gethostbyname(domain)
             log(f"DNS 解析: {domain} → {ip}")
-            # 实际 TCP 连接测试（3 秒超时）
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            try:
-                sock.connect((ip, port))
-                log(f"连接测试: {domain}:{port} 正常")
-            except Exception:
-                log(f"⚠ 连接失败: {domain}:{port}（IP={ip}），可能被污染或网络不通")
-                dns_ok = False
-            finally:
-                sock.close()
         except socket.gaierror as e:
             log(f"⚠ DNS 解析失败: {domain} → {e}")
-            dns_ok = False
+            resolve_fail_count += 1
 
-    if not dns_ok:
-        log("检测到 DNS 或网络异常，尝试自动修复 DNS...")
-        log("切换 DNS 为 阿里(223.5.5.5) + 腾讯(119.29.29.29)...")
-        # 方法1: 修改 systemd-resolved 配置
+    # 只有多数域名解析失败才判定 DNS 有问题（单个失败可能是临时问题）
+    if resolve_fail_count >= 2:
+        log(f"DNS 解析异常（{resolve_fail_count}/{len(test_domains)} 失败），尝试修复...")
+        log("添加 DNS: 阿里(223.5.5.5) + 腾讯(119.29.29.29)...")
+        # 修复方式：在 resolv.conf 前面插入国内 DNS，保留原有配置
+        try:
+            resolv = "/etc/resolv.conf"
+            existing = ""
+            if os.path.exists(resolv) and not os.path.islink(resolv):
+                with open(resolv, "r") as f:
+                    existing = f.read()
+            # 避免重复添加
+            if "223.5.5.5" not in existing:
+                new_content = "nameserver 223.5.5.5\nnameserver 119.29.29.29\n" + existing
+                if not os.path.islink(resolv):
+                    with open(resolv, "w") as f:
+                        f.write(new_content)
+                    log("resolv.conf 已更新（前插国内 DNS，保留原有配置）")
+        except Exception as e:
+            log(f"修改 resolv.conf 失败: {e}")
+        # 对 systemd-resolved 系统，添加 DNS 而非覆盖
         resolved_conf = "/etc/systemd/resolved.conf"
         if os.path.exists(resolved_conf):
             try:
-                with open(resolved_conf, "w") as f:
-                    f.write(
-                        "[Resolve]\n"
-                        "DNS=223.5.5.5 119.29.29.29\n"
-                        "FallbackDNS=8.8.8.8 1.1.1.1\n"
-                    )
-                run_command("systemctl restart systemd-resolved", quiet=True)
-                log("systemd-resolved DNS 已更新")
+                with open(resolved_conf, "r") as f:
+                    content = f.read()
+                if "223.5.5.5" not in content:
+                    # 替换或追加 DNS 行
+                    if "DNS=" in content:
+                        content = re.sub(
+                            r"^DNS=.*$",
+                            "DNS=223.5.5.5 119.29.29.29",
+                            content,
+                            flags=re.MULTILINE,
+                        )
+                    else:
+                        content = content.rstrip() + "\nDNS=223.5.5.5 119.29.29.29\n"
+                    with open(resolved_conf, "w") as f:
+                        f.write(content)
+                    run_command("systemctl restart systemd-resolved", quiet=True)
+                    log("systemd-resolved DNS 已更新")
             except Exception as e:
                 log(f"修改 systemd-resolved 失败: {e}")
-        # 方法2: 直接写 resolv.conf（兜底）
-        try:
-            resolv = "/etc/resolv.conf"
-            if not os.path.islink(resolv):
-                with open(resolv, "w") as f:
-                    f.write("nameserver 223.5.5.5\nnameserver 119.29.29.29\n")
-                log("resolv.conf DNS 已更新")
-        except Exception as e:
-            log(f"修改 resolv.conf 失败: {e}")
-        # 验证修复
+        # 验证
         time.sleep(2)
-        for domain, port in test_targets:
+        for domain in test_domains:
             try:
                 ip = socket.gethostbyname(domain)
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(5)
-                try:
-                    sock.connect((ip, port))
-                    log(f"修复后验证: {domain} → {ip} 连接正常")
-                except Exception:
-                    log(f"修复后验证: {domain} → {ip} 仍无法连接")
-                finally:
-                    sock.close()
+                log(f"修复后验证: {domain} → {ip} ✓")
             except Exception as e:
                 log(f"修复后验证失败: {domain} → {e}")
-    return dns_ok
+        return False
+    log("DNS 解析正常")
+    return True
 
 
 def install_nodejs():
