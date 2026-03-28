@@ -1108,25 +1108,32 @@ def deploy_sillytavern():
         log(f"使用npm镜像: {npm_registry}")
     else:
         npm_cmd = "npm install --no-audit --no-fund"
+    node_modules = os.path.join(tavern_dir, "node_modules")
+    express_dir = os.path.join(node_modules, "express")
     for attempt in range(3):
         if attempt > 0:
             log(f"npm install 重试第 {attempt} 次...")
-            run_command("rm -rf node_modules", cwd=tavern_dir)
+            run_command("rm -rf node_modules package-lock.json", cwd=tavern_dir)
             run_command("npm cache clean --force", cwd=tavern_dir)
         success, output = run_command_stream(
             npm_cmd, cwd=tavern_dir, generation=install_generation, timeout=900
         )
-        # 即使返回码非0，也检查 node_modules 是否实际存在
-        node_modules = os.path.join(tavern_dir, "node_modules")
         if success:
             install_success = True
             break
-        elif os.path.exists(node_modules) and len(os.listdir(node_modules)) > 10:
+        # npm 崩溃（SIGABRT=-6 等负返回码）不能视为成功，必须重试
+        if isinstance(output, str) and "Exit handler never called" in output:
+            log("npm 进程崩溃（Exit handler never called），清理后重试...")
+            continue
+        # 非崩溃情况：检查关键依赖 express 是否存在（区分 warning 和真正的失败）
+        if os.path.exists(express_dir):
             log(
-                "npm 返回码非0，但 node_modules 已存在（可能是 warning 导致），视为成功"
+                "npm 返回码非0，但关键依赖 express 已存在（可能是 warning 导致），视为成功"
             )
             install_success = True
             break
+        else:
+            log("npm 失败且关键依赖缺失，重试...")
     if not install_success:
         log(
             "❌ npm依赖安装失败（已重试3次）。可能原因：网络不稳定或 npm 源不可用。建议操作：点击‘镜像加速’设置 npm 镜像源后重试"
@@ -1291,14 +1298,17 @@ def configure_firewall():
     """配置防火墙"""
     log("配置防火墙...")
     ports = [config["astrbot_port"], config["napcat_port"], config["tavern_port"]]
-    ufw_exists, _ = run_command("which ufw")
-    firewalld_exists, _ = run_command("which firewall-cmd")
+    ufw_active, _ = run_command("ufw status 2>/dev/null | grep -q 'Status: active'", quiet=True)
+    firewalld_active, _ = run_command("systemctl is-active --quiet firewalld", quiet=True)
+    if not ufw_active and not firewalld_active:
+        log("未检测到活跃的防火墙（ufw/firewalld 均未运行），跳过配置")
+        return
     for port in ports:
-        if ufw_exists:
+        if ufw_active:
             run_command(f"ufw allow {port}/tcp")
-        elif firewalld_exists:
+        elif firewalld_active:
             run_command(f"firewall-cmd --permanent --add-port={port}/tcp")
-    if firewalld_exists:
+    if firewalld_active:
         run_command("firewall-cmd --reload")
     log("防火墙配置完成")
 
