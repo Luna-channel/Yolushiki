@@ -26,24 +26,28 @@
             --ency-bg: var(--bg-secondary);
         }
         [data-theme="light"] {
-            --bg-primary: #eef2f7;
-            --bg-secondary: #dde4ed;
-            --bg-card: rgba(255,255,255,0.85);
-            --accent-blue: #2d5a8e;
-            --accent-blue-light: #3a7bd5;
+            --bg-primary: #e8f0fe;
+            --bg-secondary: #d0e2f8;
+            --bg-card: rgba(255,255,255,0.9);
+            --accent-blue: #2d6ab8;
+            --accent-blue-light: #4a90d9;
             --accent-red: #c0392b;
             --accent-yellow: #b8860b;
             --accent-green: #27ae60;
-            --text-primary: #1a2332;
-            --text-secondary: #5a6a7e;
-            --border: rgba(45,90,142,0.2);
-            --topbar-bg: rgba(255,255,255,0.85);
-            --card-shadow: 0 1px 4px rgba(0,0,0,0.08);
-            --input-bg: rgba(255,255,255,0.8);
-            --code-bg: #e8ecf1;
-            --ency-bg: #f5f7fa;
+            --text-primary: #1a2a40;
+            --text-secondary: #506888;
+            --border: rgba(74,144,217,0.2);
+            --topbar-bg: rgba(232,240,254,0.92);
+            --card-shadow: 0 2px 8px rgba(45,106,184,0.08);
+            --input-bg: rgba(255,255,255,0.85);
+            --code-bg: #dce6f4;
+            --ency-bg: #eaf1fc;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body, .topbar, .container, .card, .svc-card, .sys-grid, .sys-item,
+        .topbar-btn, .svc-status, .log-section, .log-header, input, button, textarea, select {
+            transition: background 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
@@ -779,6 +783,90 @@
         .mig-close-btn:hover { color: var(--text-primary); }
         .migration-box { position: relative; }
 
+        /* ===== 更新红点 ===== */
+        .update-dot {
+            position: absolute;
+            top: 4px; right: 4px;
+            width: 8px; height: 8px;
+            background: var(--accent-red);
+            border-radius: 50%;
+            animation: pulse-dot 1.5s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        /* ===== 更新弹窗 ===== */
+        .update-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5000;
+            display: none;
+        }
+        .update-overlay.show { display: flex; }
+        .update-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px 32px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+        }
+        .update-box .update-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .update-box .update-info {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .update-box .ver-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .ver-badge.current { background: rgba(45,90,142,0.3); color: var(--accent-blue-light); }
+        .ver-badge.remote { background: rgba(39,174,96,0.3); color: var(--accent-green); }
+        .update-box .update-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+        .update-box .update-actions button {
+            padding: 8px 24px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--input-bg);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .update-box .update-actions button:hover { background: var(--accent-blue); color: #fff; }
+        .update-box .update-actions button.btn-primary {
+            background: var(--accent-blue);
+            color: #fff;
+            border-color: var(--accent-blue);
+        }
+        .update-box .update-actions button.btn-primary:hover { background: var(--accent-blue-light); }
+        .update-box .update-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .update-progress { font-size: 0.85rem; color: var(--accent-yellow); margin-top: 12px; display: none; }
+
         /* ===== 公告弹窗 ===== */
         .announcement-overlay {
             position: fixed;
@@ -999,11 +1087,16 @@
                 <i data-lucide="bird"></i>
                 <span style="font-size:0.8rem;">百科教程</span>
             </button>
+            <button class="topbar-btn" onclick="openMigration()" title="搬家" style="margin-left:4px;">
+                <i data-lucide="package"></i>
+                <span style="font-size:0.8rem;">搬家</span>
+            </button>
             <button class="topbar-btn topbar-btn-announce" onclick="showAnnouncement()" title="公告" style="margin-left:4px;">
                 <i data-lucide="megaphone"></i>
             </button>
-            <button class="topbar-btn" onclick="openMigration()" title="搬家">
-                <i data-lucide="package"></i>
+            <button class="topbar-btn" onclick="checkForUpdate()" id="update-btn" title="检查更新" style="margin-left:4px;position:relative;">
+                <i data-lucide="refresh-cw"></i>
+                <span class="update-dot" id="update-dot" style="display:none;"></span>
             </button>
             <button class="topbar-btn" onclick="toggleTheme()" id="theme-toggle-btn" title="切换主题">
                 <i data-lucide="sun" id="theme-icon-sun" style="display:none;"></i>
@@ -1688,6 +1781,22 @@
         </button>
     </div>
 
+    <!-- ===== 更新弹窗 ===== -->
+    <div class="update-overlay" id="update-overlay">
+        <div class="update-box">
+            <div class="update-title"><i data-lucide="refresh-cw" style="width:20px;height:20px;color:var(--accent-blue-light);"></i> <span id="update-title-text">检查更新</span></div>
+            <div class="update-info" id="update-info">正在检查...</div>
+            <div class="update-actions" id="update-actions" style="display:none;">
+                <button onclick="closeUpdate()">取消</button>
+                <button class="btn-primary" id="update-confirm-btn" onclick="doUpdate()">立即更新</button>
+            </div>
+            <div class="update-actions" id="update-close-only" style="display:none;">
+                <button onclick="closeUpdate()">关闭</button>
+            </div>
+            <div class="update-progress" id="update-progress"></div>
+        </div>
+    </div>
+
     <!-- ===== 公告弹窗 ===== -->
     <div class="announcement-overlay" id="announcement-overlay" style="display:none;">
         <div class="announcement-box">
@@ -1831,9 +1940,20 @@
         // ===== 公告系统 =====
         const ANNOUNCEMENTS = [
             {
+                id: 2,
+                title: 'v1.1.0 更新日志',
+                pinned: true,
+                content: [
+                    '新增「搬家工具」：支持一键备份/恢复 AstrBot、SillyTavern、NapCat 的全部数据与配置，轻松迁移到新服务器。',
+                    '新增「在线更新」：右上角可一键检测并更新夜鹭机到最新版本，无需重新部署。',
+                    '优化浅色主题配色，新增主题切换过渡动画。',
+                    '修复 NapCat 正常连接时误报异常的问题。'
+                ]
+            },
+            {
                 id: 1,
                 title: '免费分享声明',
-                pinned: true,
+                pinned: false,
                 content: [
                     '夜鹭机为免费分享，作者：Luna_Dol 内容为开源，禁止倒卖。',
                     '如果你在任何渠道购买了夜鹭机，凭借退款+举报截图联系小红书 @柯尔速递 领取免费1对1技术支持。',
@@ -1986,6 +2106,7 @@
             refreshSystemInfo();
             fetchNapCatToken();
             checkServicesInstalled();
+            silentCheckUpdate();
             if (statusInterval) clearInterval(statusInterval);
             statusInterval = setInterval(refreshStatus, 15000);
         }
@@ -2964,6 +3085,115 @@
 
         function hideReportModal() {
             document.getElementById('report-modal').classList.add('hidden');
+        }
+
+        // ===== 在线更新 =====
+        let _updateData = null;
+
+        async function checkForUpdate() {
+            const overlay = document.getElementById('update-overlay');
+            const infoEl = document.getElementById('update-info');
+            const titleEl = document.getElementById('update-title-text');
+            const actionsEl = document.getElementById('update-actions');
+            const closeOnly = document.getElementById('update-close-only');
+            const progressEl = document.getElementById('update-progress');
+
+            // 重置状态
+            titleEl.textContent = '检查更新';
+            infoEl.innerHTML = '正在检查最新版本...';
+            actionsEl.style.display = 'none';
+            closeOnly.style.display = 'none';
+            progressEl.style.display = 'none';
+            overlay.classList.add('show');
+            lucide.createIcons();
+
+            try {
+                const resp = await fetch('/api/system/check-update');
+                const data = await resp.json();
+                if (!data.success) {
+                    titleEl.textContent = '检查失败';
+                    infoEl.innerHTML = `<span style="color:var(--accent-red);">${data.error || '未知错误'}</span>`;
+                    closeOnly.style.display = 'flex';
+                    return;
+                }
+                _updateData = data;
+                if (data.has_update) {
+                    titleEl.textContent = '发现新版本';
+                    infoEl.innerHTML = `当前版本：<span class="ver-badge current">v${data.current}</span>&nbsp;&nbsp;→&nbsp;&nbsp;最新版本：<span class="ver-badge remote">v${data.remote}</span><br><br><span style="font-size:0.85rem;">更新将自动下载最新文件并重启管理面板。<br>云酒馆、AstrBot、NapCat 不受影响。</span>`;
+                    actionsEl.style.display = 'flex';
+                    document.getElementById('update-dot').style.display = 'block';
+                } else {
+                    titleEl.textContent = '已是最新';
+                    infoEl.innerHTML = `当前版本：<span class="ver-badge current">v${data.current}</span><br><br>你的夜鹭机已经是最新版本。`;
+                    closeOnly.style.display = 'flex';
+                    document.getElementById('update-dot').style.display = 'none';
+                }
+            } catch (e) {
+                titleEl.textContent = '网络错误';
+                infoEl.innerHTML = `<span style="color:var(--accent-red);">无法连接到更新服务器，请检查网络。</span>`;
+                closeOnly.style.display = 'flex';
+            }
+        }
+
+        async function doUpdate() {
+            const infoEl = document.getElementById('update-info');
+            const actionsEl = document.getElementById('update-actions');
+            const progressEl = document.getElementById('update-progress');
+            const confirmBtn = document.getElementById('update-confirm-btn');
+            const titleEl = document.getElementById('update-title-text');
+
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = '更新中...';
+            progressEl.style.display = 'block';
+            progressEl.textContent = '正在下载最新文件...';
+
+            try {
+                const resp = await fetch('/api/system/do-update', { method: 'POST' });
+                const data = await resp.json();
+                actionsEl.style.display = 'none';
+                if (data.success) {
+                    titleEl.textContent = '更新成功';
+                    infoEl.innerHTML = `<span style="color:var(--accent-green);">已更新 ${data.updated.length} 个文件，服务正在重启...</span>`;
+                    progressEl.textContent = '页面将在 5 秒后自动刷新';
+                    document.getElementById('update-dot').style.display = 'none';
+                    setTimeout(() => window.location.reload(), 5000);
+                } else {
+                    titleEl.textContent = '更新部分失败';
+                    let msg = `已更新 ${data.updated.length} 个文件`;
+                    if (data.failed.length > 0) {
+                        msg += `<br>失败 ${data.failed.length} 个：` + data.failed.map(f => f.file).join(', ');
+                    }
+                    infoEl.innerHTML = `<span style="color:var(--accent-yellow);">${msg}</span>`;
+                    progressEl.textContent = data.updated.length > 0 ? '部分更新已应用，服务将重启...' : '';
+                    const closeOnly = document.getElementById('update-close-only');
+                    closeOnly.style.display = 'flex';
+                    if (data.updated.length > 0) {
+                        setTimeout(() => window.location.reload(), 5000);
+                    }
+                }
+            } catch (e) {
+                titleEl.textContent = '更新失败';
+                infoEl.innerHTML = `<span style="color:var(--accent-red);">网络错误，请稍后重试。</span>`;
+                progressEl.style.display = 'none';
+                const closeOnly = document.getElementById('update-close-only');
+                closeOnly.style.display = 'flex';
+                actionsEl.style.display = 'none';
+            }
+        }
+
+        function closeUpdate() {
+            document.getElementById('update-overlay').classList.remove('show');
+        }
+
+        // 页面加载后静默检查是否有更新（只显示红点，不弹窗）
+        async function silentCheckUpdate() {
+            try {
+                const resp = await fetch('/api/system/check-update');
+                const data = await resp.json();
+                if (data.success && data.has_update) {
+                    document.getElementById('update-dot').style.display = 'block';
+                }
+            } catch (e) { /* 静默失败 */ }
         }
 
         // ===== 搬家功能 =====

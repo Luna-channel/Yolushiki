@@ -4,7 +4,7 @@
 夜鹭机 管理面板 (Phase 2)
 """
 
-VERSION = "1.0.2"
+VERSION = "1.1.0"
 
 import glob
 import json
@@ -97,6 +97,22 @@ _STATUS_CACHE_TTL = 5  # 秒
 # 系统信息缓存
 _sysinfo_cache = {"data": None, "time": 0}
 _SYSINFO_CACHE_TTL = 30  # 秒（IP/磁盘/内存不会频繁变化）
+
+# GitHub 仓库信息（用于自动更新）
+GITHUB_REPO = "Luna-channel/Yolushiki"
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/{repo}/master"
+YOLUSHIKI_DIR = "/opt/yolushiki"
+UPDATE_FILES = [
+    "app.py",
+    "templates/index.html",
+    "templates/login.html",
+    "templates/tutorial_napcat.html",
+    "templates/tutorial_astrbot.html",
+    "templates/tutorial_tavern.html",
+    "templates/tutorial_server.html",
+    "install.sh",
+    "setup.sh",
+]
 
 # 镜像/加速配置（运行时可切换）
 runtime_mirrors = {
@@ -430,25 +446,47 @@ def get_service_status(name):
 
 
 def check_napcat_error():
-    """检查 NapCat 最近日志中是否有连接错误"""
-    ok, output = run_command("docker logs napcat --tail 30 2>&1", quiet=True)
+    """检查 NapCat 最近日志中是否有连接错误（排除已恢复的情况）"""
+    ok, output = run_command("docker logs napcat --tail 50 2>&1", quiet=True)
     if not ok or not output:
         return ""
+    # 真正表示连接失败的关键词（更精确，避免匹配正常日志中的 error/failed）
     error_keywords = [
-        "error",
-        "failed",
         "断开",
         "disconnect",
         "ECONNREFUSED",
-        "timeout",
+        "connection refused",
         "登录失败",
+        "login failed",
+        "掉线",
+        "kicked off",
+        "token expired",
+    ]
+    # 表示已成功连接的关键词
+    success_keywords = [
+        "登录成功",
+        "login success",
+        "bot connected",
+        "connected to",
+        "qq login",
+        "账号登录",
+        "上线",
     ]
     lines = output.strip().split("\n")
-    for line in reversed(lines):
+    last_error_idx = -1
+    last_error_line = ""
+    last_success_idx = -1
+    for idx, line in enumerate(lines):
         lower = line.lower()
         if any(kw.lower() in lower for kw in error_keywords):
-            return line.strip()[:120]
-    return ""
+            last_error_idx = idx
+            last_error_line = line.strip()[:120]
+        if any(kw.lower() in lower for kw in success_keywords):
+            last_success_idx = idx
+    # 如果最近的成功日志比最近的错误日志更新，说明已恢复
+    if last_error_idx < 0 or last_success_idx > last_error_idx:
+        return ""
+    return last_error_line
 
 
 def get_all_services_status():
@@ -2974,6 +3012,86 @@ def api_migration_import():
         return jsonify({"success": False, "error": "文件不是有效的 tar.gz 格式"}), 400
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ========== 路由：自动更新 ==========
+
+
+@app.route("/api/system/check-update")
+@login_required
+def api_check_update():
+    """检查 GitHub 上的最新版本"""
+    import urllib.request
+
+    git_proxy = runtime_mirrors.get("git_proxy", "")
+    raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/master/app.py"
+    if git_proxy:
+        raw_url = f"{git_proxy}{raw_url}"
+    try:
+        req = urllib.request.Request(raw_url, headers={"User-Agent": "Yolushiki"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            content = resp.read().decode("utf-8", errors="ignore")
+        remote_version = None
+        for line in content.split("\n")[:20]:
+            if line.startswith("VERSION"):
+                remote_version = line.split("=")[1].strip().strip("\"'")
+                break
+        if not remote_version:
+            return jsonify({"success": False, "error": "无法解析远程版本号"})
+        has_update = remote_version != VERSION
+        return jsonify(
+            {
+                "success": True,
+                "current": VERSION,
+                "remote": remote_version,
+                "has_update": has_update,
+            }
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": f"检查更新失败: {str(e)}"})
+
+
+@app.route("/api/system/do-update", methods=["POST"])
+@login_required
+def api_do_update():
+    """从 GitHub 下载最新文件并覆盖，然后重启服务"""
+    import urllib.request
+
+    git_proxy = runtime_mirrors.get("git_proxy", "")
+    base = f"https://raw.githubusercontent.com/{GITHUB_REPO}/master"
+    updated = []
+    failed = []
+    for rel_path in UPDATE_FILES:
+        url = f"{base}/{rel_path}"
+        if git_proxy:
+            url = f"{git_proxy}{url}"
+        dst = os.path.join(YOLUSHIKI_DIR, rel_path)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Yolushiki"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = resp.read()
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "wb") as f:
+                f.write(data)
+            updated.append(rel_path)
+        except Exception as e:
+            failed.append({"file": rel_path, "error": str(e)})
+    # 重启夜鹭机服务（延迟 2 秒，让响应先返回）
+    def _restart():
+        time.sleep(2)
+        os.system("pm2 restart yolushiki 2>/dev/null || true")
+
+    if updated:
+        threading.Thread(target=_restart, daemon=True).start()
+    return jsonify(
+        {
+            "success": len(failed) == 0,
+            "updated": updated,
+            "failed": failed,
+            "message": f"已更新 {len(updated)} 个文件"
+            + (f"，{len(failed)} 个失败" if failed else "，正在重启服务..."),
+        }
+    )
 
 
 # ========== 启动 ==========
