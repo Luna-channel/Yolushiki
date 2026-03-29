@@ -3020,35 +3020,60 @@ def api_migration_import():
 @app.route("/api/system/check-update")
 @login_required
 def api_check_update():
-    """检查 GitHub 上的最新版本"""
+    """检查 GitHub 上的最新版本（优先用 GitHub API，无缓存）"""
     import urllib.request
 
     git_proxy = runtime_mirrors.get("git_proxy", "")
-    raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/master/app.py"
-    if git_proxy:
-        raw_url = f"{git_proxy}{raw_url}"
+    remote_version = None
+
+    # 方法1: GitHub API（无 CDN 缓存，实时数据）
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/app.py?ref=master"
     try:
-        req = urllib.request.Request(raw_url, headers={"User-Agent": "Yolushiki"})
+        req = urllib.request.Request(api_url, headers={
+            "User-Agent": "Yolushiki",
+            "Accept": "application/vnd.github.v3.raw",
+        })
         with urllib.request.urlopen(req, timeout=15) as resp:
             content = resp.read().decode("utf-8", errors="ignore")
-        remote_version = None
         for line in content.split("\n")[:20]:
             if line.startswith("VERSION"):
                 remote_version = line.split("=")[1].strip().strip("\"'")
                 break
-        if not remote_version:
-            return jsonify({"success": False, "error": "无法解析远程版本号"})
-        has_update = remote_version != VERSION
-        return jsonify(
-            {
-                "success": True,
-                "current": VERSION,
-                "remote": remote_version,
-                "has_update": has_update,
-            }
-        )
-    except Exception as e:
-        return jsonify({"success": False, "error": f"检查更新失败: {str(e)}"})
+    except Exception:
+        pass
+
+    # 方法2: fallback 走 raw + 代理 + 时间戳破坏缓存
+    if not remote_version:
+        ts = int(time.time())
+        raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/master/app.py?t={ts}"
+        if git_proxy:
+            raw_url = f"{git_proxy}{raw_url}"
+        try:
+            req = urllib.request.Request(raw_url, headers={
+                "User-Agent": "Yolushiki",
+                "Cache-Control": "no-cache",
+            })
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                content = resp.read().decode("utf-8", errors="ignore")
+            for line in content.split("\n")[:20]:
+                if line.startswith("VERSION"):
+                    remote_version = line.split("=")[1].strip().strip("\"'")
+                    break
+        except Exception as e:
+            return jsonify({"success": False, "error": f"检查更新失败: {str(e)}"})
+
+    if not remote_version:
+        return jsonify({"success": False, "error": "无法解析远程版本号"})
+
+    has_update = remote_version != VERSION
+    return jsonify(
+        {
+            "success": True,
+            "current": VERSION,
+            "remote": remote_version,
+            "has_update": has_update,
+        }
+    )
 
 
 @app.route("/api/system/do-update", methods=["POST"])

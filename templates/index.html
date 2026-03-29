@@ -25,6 +25,7 @@
             --code-bg: #060d18;
             --ency-bg: var(--bg-secondary);
             --sys-item-bg: rgba(0,0,0,0.15);
+            --log-header-bg: rgba(0,0,0,0.2);
         }
         [data-theme="light"] {
             --bg-primary: #e8f0fe;
@@ -44,6 +45,7 @@
             --code-bg: #dce6f4;
             --ency-bg: #eaf1fc;
             --sys-item-bg: rgba(74,144,217,0.12);
+            --log-header-bg: rgba(74,144,217,0.15);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body, .topbar, .container, .card, .svc-card, .sys-grid, .sys-item,
@@ -576,7 +578,7 @@
             align-items: center;
             gap: 8px;
             padding: 12px 16px;
-            background: rgba(0,0,0,0.2);
+            background: var(--log-header-bg);
             cursor: pointer;
             transition: background 0.2s;
             user-select: none;
