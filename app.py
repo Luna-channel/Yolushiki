@@ -19,6 +19,7 @@ import socket
 import functools
 import hashlib
 import re
+import shlex
 from flask import (
     Flask,
     render_template,
@@ -46,6 +47,8 @@ DEFAULT_CONFIG = {
     "install_plugins": True,
     "server_ip": "",
     "secret_key": None,
+    "service_names": {},
+    "service_paths": {},
 }
 
 
@@ -59,7 +62,7 @@ def load_config():
             return merged
         except Exception:
             pass
-    return dict(DEFAULT_CONFIG)
+    return json.loads(json.dumps(DEFAULT_CONFIG))
 
 
 def save_config():
@@ -354,38 +357,244 @@ def check_port_health(port, timeout=2):
         return False
 
 
+def _service_names():
+    names = config.setdefault("service_names", {})
+    if not isinstance(names, dict):
+        names = {}
+        config["service_names"] = names
+    return names
+
+
+def _service_paths():
+    paths = config.setdefault("service_paths", {})
+    if not isinstance(paths, dict):
+        paths = {}
+        config["service_paths"] = paths
+    return paths
+
+
+def _shell_quote(value):
+    return shlex.quote(str(value))
+
+
+def _docker_containers():
+    ok, output = run_command(
+        "docker ps -a --format '{{.Names}}|||{{.Image}}|||{{.Status}}'", quiet=True
+    )
+    if not ok:
+        return []
+    containers = []
+    for line in output.splitlines():
+        parts = line.strip().split("|||")
+        if len(parts) >= 2 and parts[0]:
+            containers.append(
+                {
+                    "name": parts[0].strip(),
+                    "image": parts[1].strip(),
+                    "status": parts[2].strip() if len(parts) > 2 else "",
+                }
+            )
+    return containers
+
+
+def _find_docker_service(logical_name):
+    saved_name = _service_names().get(logical_name)
+    if saved_name:
+        ok, _ = run_command(f"docker inspect {_shell_quote(saved_name)}", quiet=True)
+        if ok:
+            return saved_name
+
+    containers = _docker_containers()
+    exact = [logical_name]
+    image_keywords = {
+        "astrbot": ["astrbot"],
+        "napcat": ["napcat"],
+    }.get(logical_name, [])
+    name_keywords = {
+        "astrbot": ["astrbot"],
+        "napcat": ["napcat"],
+    }.get(logical_name, [])
+
+    for wanted in exact:
+        for c in containers:
+            if c["name"].lower() == wanted:
+                _service_names()[logical_name] = c["name"]
+                return c["name"]
+    for c in containers:
+        image = c["image"].lower()
+        cname = c["name"].lower()
+        if any(kw in image for kw in image_keywords) or any(
+            kw in cname for kw in name_keywords
+        ):
+            _service_names()[logical_name] = c["name"]
+            return c["name"]
+    return logical_name
+
+
+def _detect_docker_port(container_name, internal_port):
+    ok, output = run_command(
+        f"docker port {_shell_quote(container_name)} {internal_port}/tcp", quiet=True
+    )
+    if not ok or not output.strip():
+        return None
+    match = re.search(r":(\d+)\s*$", output.strip().splitlines()[0])
+    return int(match.group(1)) if match else None
+
+
+def _detect_container_mount(container_name, destination):
+    ok, output = run_command(
+        f"docker inspect --format='{{{{range .Mounts}}}}{{{{.Destination}}}}|||{{{{.Source}}}}\n{{{{end}}}}' {_shell_quote(container_name)}",
+        quiet=True,
+    )
+    if not ok:
+        return None
+    for line in output.splitlines():
+        parts = line.strip().split("|||")
+        if len(parts) == 2 and parts[0] == destination and parts[1]:
+            return parts[1]
+    return None
+
+
+def _pm2_processes():
+    ok, output = run_command("pm2 jlist", quiet=True)
+    if not ok:
+        return []
+    try:
+        processes = json.loads(output)
+        return processes if isinstance(processes, list) else []
+    except json.JSONDecodeError:
+        return []
+
+
+def _find_sillytavern_pm2():
+    saved_name = _service_names().get("sillytavern")
+    processes = _pm2_processes()
+    if saved_name:
+        for p in processes:
+            if p.get("name") == saved_name:
+                return p
+
+    candidates = []
+    for p in processes:
+        name = str(p.get("name", ""))
+        env = p.get("pm2_env", {}) or {}
+        cwd = str(env.get("pm_cwd", ""))
+        script = str(env.get("pm_exec_path", ""))
+        haystack = " ".join([name, cwd, script]).lower()
+        package_json = os.path.join(cwd, "package.json") if cwd else ""
+        is_tavern_package = False
+        if package_json and os.path.exists(package_json):
+            try:
+                with open(package_json, "r", encoding="utf-8") as fp:
+                    pkg = json.load(fp)
+                pkg_text = " ".join(
+                    [str(pkg.get("name", "")), str(pkg.get("description", ""))]
+                ).lower()
+                is_tavern_package = "sillytavern" in pkg_text or "silly tavern" in pkg_text
+            except Exception:
+                is_tavern_package = False
+        if name.lower() == "sillytavern" or "sillytavern" in haystack or is_tavern_package:
+            candidates.append(p)
+
+    if not candidates:
+        return None
+    proc = candidates[0]
+    env = proc.get("pm2_env", {}) or {}
+    _service_names()["sillytavern"] = proc.get("name", "sillytavern")
+    if env.get("pm_cwd"):
+        _service_paths()["sillytavern"] = env["pm_cwd"]
+    return proc
+
+
+def _detect_tavern_port(tavern_dir):
+    if not tavern_dir:
+        return None
+    for filename in ["config.yaml", "config.yml"]:
+        path = os.path.join(tavern_dir, filename)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as fp:
+                content = fp.read()
+            match = re.search(r"(?m)^\s*port\s*:\s*(\d+)\s*$", content)
+            if match:
+                return int(match.group(1))
+        except Exception:
+            continue
+    return None
+
+
+def adopt_existing_services(save=True):
+    """发现已有实例并记录真实名称，让面板作为管理器接管。"""
+    adopted = False
+
+    astrbot_name = _find_docker_service("astrbot")
+    if astrbot_name != "astrbot" or check_service_installed("astrbot"):
+        port = _detect_docker_port(astrbot_name, 6185)
+        if port:
+            config["astrbot_port"] = port
+        data_path = _detect_container_mount(astrbot_name, "/AstrBot/data")
+        if data_path:
+            _service_paths()["astrbot_data"] = data_path
+        adopted = True
+
+    napcat_name = _find_docker_service("napcat")
+    if napcat_name != "napcat" or check_service_installed("napcat"):
+        port = _detect_docker_port(napcat_name, 6099)
+        if port:
+            config["napcat_port"] = port
+        config_path = _detect_container_mount(napcat_name, "/app/napcat/config")
+        if config_path:
+            _service_paths()["napcat"] = config_path
+        adopted = True
+
+    tavern_proc = _find_sillytavern_pm2()
+    if tavern_proc:
+        tavern_dir = (tavern_proc.get("pm2_env", {}) or {}).get("pm_cwd", "")
+        port = _detect_tavern_port(tavern_dir)
+        if port:
+            config["tavern_port"] = port
+        adopted = True
+    elif check_service_installed("sillytavern"):
+        port = _detect_tavern_port(_service_paths().get("sillytavern", ""))
+        if port:
+            config["tavern_port"] = port
+        adopted = True
+
+    if adopted and not config.get("installed"):
+        config["installed"] = True
+    if save and adopted:
+        save_config()
+    return adopted
+
+
 def get_service_status(name):
     """获取单个服务状态"""
+    adopt_existing_services(save=False)
     port_map = {
         "napcat": config.get("napcat_port", 6099),
         "astrbot": config.get("astrbot_port", 6185),
         "sillytavern": config.get("tavern_port", 18888),
     }
     if name == "sillytavern":
-        ok, output = run_command("pm2 jlist", quiet=True)
-        if ok:
-            try:
-                processes = json.loads(output)
-                for p in processes:
-                    if p.get("name") == "sillytavern":
-                        result = {
-                            "name": "sillytavern",
-                            "status": p.get("pm2_env", {}).get("status", "unknown"),
-                            "pid": p.get("pid", 0),
-                            "uptime": p.get("pm2_env", {}).get("pm_uptime", 0),
-                            "restarts": p.get("pm2_env", {}).get("restart_time", 0),
-                            "memory": p.get("monit", {}).get("memory", 0),
-                            "cpu": p.get("monit", {}).get("cpu", 0),
-                        }
-                        if result["status"] == "online":
-                            result["health_ok"] = check_port_health(
-                                port_map["sillytavern"]
-                            )
-                        else:
-                            result["health_ok"] = False
-                        return result
-            except (json.JSONDecodeError, KeyError):
-                pass
+        p = _find_sillytavern_pm2()
+        if p:
+            result = {
+                "name": "sillytavern",
+                "real_name": p.get("name", "sillytavern"),
+                "status": p.get("pm2_env", {}).get("status", "unknown"),
+                "pid": p.get("pid", 0),
+                "uptime": p.get("pm2_env", {}).get("pm_uptime", 0),
+                "restarts": p.get("pm2_env", {}).get("restart_time", 0),
+                "memory": p.get("monit", {}).get("memory", 0),
+                "cpu": p.get("monit", {}).get("cpu", 0),
+            }
+            result["health_ok"] = (
+                check_port_health(port_map["sillytavern"])
+                if result["status"] == "online"
+                else False
+            )
+            return result
         return {
             "name": "sillytavern",
             "status": "stopped",
@@ -398,8 +607,9 @@ def get_service_status(name):
         }
     else:
         # Docker 容器 (astrbot / napcat)
+        real_name = _find_docker_service(name)
         ok, output = run_command(
-            f"docker inspect --format='{{{{.State.Status}}}}' {name}", quiet=True
+            f"docker inspect --format='{{{{.State.Status}}}}' {_shell_quote(real_name)}", quiet=True
         )
         status = output.strip().strip("'") if ok else "stopped"
         # 获取容器资源占用
@@ -407,7 +617,7 @@ def get_service_status(name):
         cpu = 0.0
         if status == "running":
             ok2, stats_out = run_command(
-                f"docker stats {name} --no-stream --format='{{{{.MemUsage}}}}|||{{{{.CPUPerc}}}}'",
+                f"docker stats {_shell_quote(real_name)} --no-stream --format='{{{{.MemUsage}}}}|||{{{{.CPUPerc}}}}'",
                 quiet=True,
             )
             if ok2:
@@ -435,6 +645,7 @@ def get_service_status(name):
         )
         return {
             "name": name,
+            "real_name": real_name,
             "status": status,
             "pid": 0,
             "uptime": 0,
@@ -447,7 +658,10 @@ def get_service_status(name):
 
 def check_napcat_error():
     """检查 NapCat 最近日志中是否有连接错误（排除已恢复的情况）"""
-    ok, output = run_command("docker logs napcat --tail 50 2>&1", quiet=True)
+    napcat_name = _find_docker_service("napcat")
+    ok, output = run_command(
+        f"docker logs {_shell_quote(napcat_name)} --tail 50 2>&1", quiet=True
+    )
     if not ok or not output:
         return ""
     # 真正表示连接失败的关键词（更精确，避免匹配正常日志中的 error/failed）
@@ -517,22 +731,26 @@ def get_all_services_status():
 
 def service_action(name, action):
     """对服务执行操作"""
+    adopt_existing_services(save=True)
     if name == "sillytavern":
+        real_name = _service_names().get("sillytavern", "sillytavern")
+        quoted_name = _shell_quote(real_name)
         if action == "restart":
-            ok, out = run_command("pm2 restart sillytavern", quiet=True)
+            ok, out = run_command(f"pm2 restart {quoted_name}", quiet=True)
             run_command("pm2 save", quiet=True)
         elif action == "stop":
-            ok, out = run_command("pm2 stop sillytavern", quiet=True)
+            ok, out = run_command(f"pm2 stop {quoted_name}", quiet=True)
             run_command("pm2 save", quiet=True)
         elif action == "start":
             # 先尝试启动已有的 stopped 进程，避免 pm2 start server.js 创建重复进程
-            ok, out = run_command("pm2 start sillytavern", quiet=True)
+            ok, out = run_command(f"pm2 start {quoted_name}", quiet=True)
             if not ok:
                 # 进程不存在，重新创建
                 run_command("pm2 delete sillytavern 2>/dev/null || true", quiet=True)
+                tavern_dir = _service_paths().get("sillytavern", "/opt/sillytavern")
                 ok, out = run_command(
                     'pm2 start server.js --name "sillytavern"',
-                    cwd="/opt/sillytavern",
+                    cwd=tavern_dir,
                     quiet=True,
                 )
             run_command("pm2 save", quiet=True)
@@ -542,12 +760,14 @@ def service_action(name, action):
         return ok, out
     else:
         # Docker 容器
+        real_name = _find_docker_service(name)
+        quoted_name = _shell_quote(real_name)
         if action == "restart":
-            ok, out = run_command(f"docker restart {name}", quiet=True)
+            ok, out = run_command(f"docker restart {quoted_name}", quiet=True)
         elif action == "stop":
-            ok, out = run_command(f"docker stop {name}", quiet=True)
+            ok, out = run_command(f"docker stop {quoted_name}", quiet=True)
         elif action == "start":
-            ok, out = run_command(f"docker start {name}", quiet=True)
+            ok, out = run_command(f"docker start {quoted_name}", quiet=True)
         else:
             return False, "未知操作"
         _status_cache["data"] = None  # 清除缓存，操作后立即刷新
@@ -556,13 +776,18 @@ def service_action(name, action):
 
 def get_service_logs(name, lines=50):
     """获取服务日志"""
+    adopt_existing_services(save=False)
     if name == "sillytavern":
+        real_name = _service_names().get("sillytavern", "sillytavern")
         ok, output = run_command(
-            f"pm2 logs sillytavern --nostream --lines {lines}", quiet=True
+            f"pm2 logs {_shell_quote(real_name)} --nostream --lines {lines}", quiet=True
         )
     else:
         # docker logs 输出到 stderr，必须用 2>&1 合并
-        ok, output = run_command(f"docker logs --tail {lines} {name} 2>&1", quiet=True)
+        real_name = _find_docker_service(name)
+        ok, output = run_command(
+            f"docker logs --tail {lines} {_shell_quote(real_name)} 2>&1", quiet=True
+        )
     return output if ok else "无法获取日志"
 
 
@@ -644,8 +869,13 @@ def get_system_info():
 def get_napcat_token():
     """从 NapCat 容器获取 WebUI 登录 token"""
     # 方法1：直接读宿主机挂载文件
-    webui_json = "/opt/astrbot/napcat/config/webui.json"
-    if os.path.exists(webui_json):
+    webui_paths = [
+        "/opt/astrbot/napcat/config/webui.json",
+        os.path.join(_service_paths().get("napcat", ""), "webui.json"),
+    ]
+    for webui_json in [p for p in webui_paths if p]:
+        if not os.path.exists(webui_json):
+            continue
         try:
             with open(webui_json, "r") as f:
                 data = json.load(f)
@@ -655,8 +885,10 @@ def get_napcat_token():
         except Exception:
             pass
     # 方法2：docker exec 读取容器内文件
+    napcat_name = _find_docker_service("napcat")
     ok, output = run_command(
-        "docker exec napcat cat /app/napcat/config/webui.json", quiet=True
+        f"docker exec {_shell_quote(napcat_name)} cat /app/napcat/config/webui.json",
+        quiet=True,
     )
     if ok:
         try:
@@ -1352,7 +1584,9 @@ def set_sillytavern_password(tavern_dir):
 def install_astrbot_plugins(selected_plugins):
     """安装AstrBot插件"""
     log("安装AstrBot插件...")
-    plugins_dir = "/opt/astrbot/data/plugins"
+    plugins_dir = os.path.join(
+        _service_paths().get("astrbot_data", "/opt/astrbot/data"), "plugins"
+    )
     run_command(f"mkdir -p {plugins_dir}")
     for plugin in selected_plugins:
         if plugin.get("selected"):
@@ -1527,32 +1761,37 @@ def do_install(generation):
         # ========== 阶段3：按顺序部署服务 ==========
         log("===== 阶段3：部署服务 =====")
         napcat_token = ""
+        adopt_existing_services(save=True)
 
         if need_docker:
-            install_status["progress"] = 25
-            install_status["message"] = "部署 AstrBot + NapCat..."
-            if not deploy_astrbot():
-                raise Exception(
-                    "AstrBot部署失败。可能原因：Docker镜像拉取或容器启动失败。建议更换 Docker 镜像源后重试"
-                )
+            if check_service_installed("astrbot") or check_service_installed("napcat"):
+                log("检测到已有 AstrBot/NapCat，跳过部署并直接接管")
+            else:
+                install_status["progress"] = 25
+                install_status["message"] = "部署 AstrBot + NapCat..."
+                if not deploy_astrbot():
+                    raise Exception(
+                        "AstrBot部署失败。可能原因：Docker镜像拉取或容器启动失败。建议更换 Docker 镜像源后重试"
+                    )
 
-            # 等待 NapCat 容器初始化完成后获取 token
-            install_status["progress"] = 55
-            install_status["message"] = "获取 NapCat 登录 Token..."
-            log("等待NapCat容器初始化...")
-            for _ in range(10):
-                time.sleep(3)
-                napcat_token = get_napcat_token()
-                if napcat_token:
-                    log(f"NapCat WebUI Token: {napcat_token}")
-                    break
-            if not napcat_token:
-                log(
-                    "未能自动获取NapCat Token，请手动查看: cat /opt/astrbot/napcat/config/webui.json"
-                )
-            config["napcat_token"] = napcat_token
+            if check_service_installed("napcat"):
+                # 等待 NapCat 容器初始化完成后获取 token；已有容器也尝试读取
+                install_status["progress"] = 55
+                install_status["message"] = "获取 NapCat 登录 Token..."
+                log("获取 NapCat WebUI Token...")
+                for _ in range(10):
+                    napcat_token = get_napcat_token()
+                    if napcat_token:
+                        log(f"NapCat WebUI Token: {napcat_token}")
+                        break
+                    time.sleep(3)
+                if not napcat_token:
+                    log(
+                        "未能自动获取NapCat Token，请手动查看 NapCat 容器内 /app/napcat/config/webui.json"
+                    )
+                config["napcat_token"] = napcat_token
 
-            if config.get("install_plugins", False):
+            if check_service_installed("astrbot") and config.get("install_plugins", False):
                 install_status["progress"] = 60
                 install_status["message"] = "安装 AstrBot 插件..."
                 install_astrbot_plugins(ASTRBOT_PLUGINS)
@@ -1563,12 +1802,15 @@ def do_install(generation):
             return
 
         if need_tavern:
-            install_status["progress"] = 65
-            install_status["message"] = "部署 SillyTavern..."
-            if not deploy_sillytavern():
-                raise Exception(
-                    "SillyTavern部署失败。可能原因：GitHub克隆或npm依赖安装失败。建议设置镜像加速后重试"
-                )
+            if check_service_installed("sillytavern"):
+                log("检测到已有 SillyTavern，跳过部署并直接接管")
+            else:
+                install_status["progress"] = 65
+                install_status["message"] = "部署 SillyTavern..."
+                if not deploy_sillytavern():
+                    raise Exception(
+                        "SillyTavern部署失败。可能原因：GitHub克隆或npm依赖安装失败。建议设置镜像加速后重试"
+                    )
         else:
             log("跳过 SillyTavern 安装")
 
@@ -1669,6 +1911,7 @@ def login_page():
 @app.route("/api/auth/check")
 def auth_check():
     """检查认证状态"""
+    adopt_existing_services(save=True)
     return jsonify(
         {
             "token_set": bool(config.get("token")),
@@ -1832,6 +2075,7 @@ def auth_change_token():
 @login_required
 def index():
     """主页：根据状态显示安装向导或仪表盘"""
+    adopt_existing_services(save=True)
     # 传给前端的 config 副本（排除 token，确保可 JSON 序列化）
     safe_config = {
         "installed": config.get("installed", False),
@@ -1912,6 +2156,7 @@ def api_service_logs(name):
 @login_required
 def api_napcat_token():
     """获取 NapCat WebUI Token"""
+    adopt_existing_services(save=True)
     token = config.get("napcat_token", "")
     if not token:
         token = get_napcat_token()
@@ -1928,7 +2173,10 @@ def api_napcat_token():
         {
             "token": token,
             "url": napcat_url,
-            "config_path": "/opt/astrbot/napcat/config/webui.json",
+            "config_path": os.path.join(
+                _service_paths().get("napcat", "/opt/astrbot/napcat/config"),
+                "webui.json",
+            ),
         }
     )
 
@@ -1939,22 +2187,29 @@ def api_napcat_token():
 def check_service_installed(name):
     """检测服务是否已安装"""
     if name == "sillytavern":
-        # 检查 SillyTavern 目录和 package.json 是否存在
-        tavern_dir = "/opt/sillytavern"
-        package_json = os.path.join(tavern_dir, "package.json")
-        return os.path.exists(package_json)
+        if _find_sillytavern_pm2():
+            return True
+        # 兜底检查常见目录，未启动 PM2 时也能识别已有文件
+        for tavern_dir in [
+            _service_paths().get("sillytavern", ""),
+            "/opt/sillytavern",
+            "/opt/SillyTavern",
+            "/root/SillyTavern",
+            "/home/SillyTavern",
+        ]:
+            package_json = os.path.join(tavern_dir, "package.json") if tavern_dir else ""
+            if os.path.exists(package_json):
+                _service_paths()["sillytavern"] = tavern_dir
+                return True
+        return False
     elif name == "astrbot":
-        # 检查 AstrBot 容器是否存在
-        ok, output = run_command(
-            "docker ps -a --format '{{.Names}}' | grep -w astrbot", quiet=True
-        )
-        return ok and "astrbot" in output
+        real_name = _find_docker_service("astrbot")
+        ok, _ = run_command(f"docker inspect {_shell_quote(real_name)}", quiet=True)
+        return ok
     elif name == "napcat":
-        # 检查 NapCat 容器是否存在
-        ok, output = run_command(
-            "docker ps -a --format '{{.Names}}' | grep -w napcat", quiet=True
-        )
-        return ok and "napcat" in output
+        real_name = _find_docker_service("napcat")
+        ok, _ = run_command(f"docker inspect {_shell_quote(real_name)}", quiet=True)
+        return ok
     return False
 
 
@@ -1962,6 +2217,7 @@ def check_service_installed(name):
 @login_required
 def api_services_installed():
     """检测各服务安装状态"""
+    adopt_existing_services(save=True)
     return jsonify(
         {
             "napcat": check_service_installed("napcat"),
